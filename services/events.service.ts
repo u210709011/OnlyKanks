@@ -2,6 +2,7 @@ import { FirebaseService, collections } from './firebase.service';
 import { auth } from '../config/firebase';
 import { collection, query, where, getDocs, GeoPoint } from 'firebase/firestore';
 import { db } from '../config/firebase';
+import uuid from 'react-native-uuid';
 
 export interface Event {
   id: string;
@@ -22,7 +23,7 @@ export class EventsService {
   static async createEvent(eventData: Omit<Event, 'id' | 'createdBy' | 'createdAt' | 'updatedAt'>) {
     if (!auth.currentUser) throw new Error('User not authenticated');
 
-    const eventId = crypto.randomUUID();
+    const eventId = uuid.v4();
     await FirebaseService.setDocument(collections.EVENTS, eventId, {
       ...eventData,
       createdBy: auth.currentUser.uid,
