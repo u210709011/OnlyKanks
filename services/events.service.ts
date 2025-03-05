@@ -14,6 +14,7 @@ export interface Event {
     longitude: number;
     address: string;
   };
+  imageUrl?: string;
   createdBy: string;
   createdAt: Date;
   updatedAt: Date;

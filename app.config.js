@@ -11,7 +11,9 @@ export default {
       firebaseStorageBucket: process.env.FIREBASE_STORAGE_BUCKET,
       firebaseMessagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
       firebaseAppId: process.env.FIREBASE_APP_ID,
-      googlePlacesApiKey: process.env.GOOGLE_PLACES_API_KEY,
+      cloudinaryCloudName: process.env.CLOUDINARY_CLOUD_NAME,
+      cloudinaryApiKey: process.env.CLOUDINARY_API_KEY,
+      cloudinaryApiSecret: process.env.CLOUDINARY_API_SECRET,
     },
   },
 }; 
