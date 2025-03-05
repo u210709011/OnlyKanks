@@ -3,7 +3,6 @@ import { View, TextInput, StyleSheet, Alert, Image, Pressable, Text, ScrollView,
 import { useRouter } from 'expo-router';
 import * as yup from 'yup';
 import { addDoc, collection } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage, auth } from '../../config/firebase';
 import { CustomButton } from '../../components/shared/CustomButton';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -94,10 +93,6 @@ export default function CreateEventScreen(): React.ReactElement {
       console.error('Upload error:', error);
       throw new Error('Failed to upload image');
     }
-  };
-
-  const removeImage = () => {
-    setImage(null);
   };
 
   const handleMapPress = async (e: any): Promise<void> => {
