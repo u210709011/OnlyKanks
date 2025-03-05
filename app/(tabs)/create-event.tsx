@@ -11,6 +11,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { format } from 'date-fns';
 import MapView, { Marker, Region } from 'react-native-maps';
 import { LocationService, UserLocation } from '../../services/location.service';
+import { CloudinaryService } from '../../services/cloudinary.service';
 
 // Define the schema for validation
 const schema = yup.object().shape({
@@ -34,6 +35,8 @@ export default function CreateEventScreen(): React.ReactElement {
   const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
   const [mapRegion, setMapRegion] = useState<Region | null>(null);
   const [markerCoordinates, setMarkerCoordinates] = useState<{latitude: number, longitude: number} | null>(null);
+  const [imageUrl, setImageUrl] = useState<string>('');
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
 
   // Get user's current location on component mount
   useEffect(() => {
@@ -71,7 +74,7 @@ export default function CreateEventScreen(): React.ReactElement {
 
   const pickImage = async (): Promise<void> => {
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: 'images',
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       aspect: [16, 9],
       quality: 0.7,
@@ -79,16 +82,22 @@ export default function CreateEventScreen(): React.ReactElement {
 
     if (!result.canceled) {
       setImage(result.assets[0].uri);
+      setImagePreview(result.assets[0].uri);
     }
   };
 
-  const uploadImage = async (uri: string): Promise<string> => {
-    const response = await fetch(uri);
-    const blob = await response.blob();
-    const filename = `events/${auth.currentUser?.uid}/${Date.now()}.jpg`;
-    const storageRef = ref(storage, filename);
-    await uploadBytes(storageRef, blob);
-    return getDownloadURL(storageRef);
+  const uploadImage = async (uri: string): Promise<void> => {
+    try {
+      const url = await CloudinaryService.uploadImage(uri);
+      setImageUrl(url);
+    } catch (error) {
+      console.error('Upload error:', error);
+      throw new Error('Failed to upload image');
+    }
+  };
+
+  const removeImage = () => {
+    setImage(null);
   };
 
   const handleMapPress = async (e: any): Promise<void> => {
@@ -121,43 +130,43 @@ export default function CreateEventScreen(): React.ReactElement {
         Alert.alert('Error', 'Please select a location on the map');
         return;
       }
-      
-      if (!location) {
-        Alert.alert('Error', 'Please enter a location name');
-        return;
-      }
 
       setIsLoading(true);
-      let imageUrl = '';
+      let finalImageUrl = '';
       
       if (image) {
-        imageUrl = await uploadImage(image);
+        try {
+          finalImageUrl = await CloudinaryService.uploadImage(image);
+          if (!finalImageUrl) {
+            throw new Error('Failed to get image URL');
+          }
+        } catch (error) {
+          console.error('Error uploading image:', error);
+          Alert.alert('Error', 'Failed to upload image');
+          return;
+        }
       }
 
-      await schema.validate({ 
-        title, 
-        date, 
-        location, 
-        description, 
-        imageUrl 
-      });
-      
-      await addDoc(collection(db, 'events'), {
+      const eventData = {
         title,
         date,
         location,
         description,
-        imageUrl,
+        imageUrl: finalImageUrl || '',
         coordinates: {
           lat: markerCoordinates.latitude,
           lon: markerCoordinates.longitude,
         },
         createdAt: new Date(),
         createdBy: auth.currentUser?.uid,
-      });
+      };
+
+      console.log('Event data being saved:', eventData);
+      await addDoc(collection(db, 'events'), eventData);
 
       router.push('/(tabs)');
     } catch (error) {
+      console.error('Submit error:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to create event';
       Alert.alert('Error', errorMessage);
     } finally {
@@ -209,10 +218,24 @@ export default function CreateEventScreen(): React.ReactElement {
       />
 
       <Pressable style={styles.imageButton} onPress={pickImage}>
-        {image ? (
-          <Image source={{ uri: image }} style={styles.imagePreview} />
+        {imagePreview ? (
+          <View style={styles.imageContainer}>
+            <Image 
+              source={{ uri: imagePreview }} 
+              style={styles.imagePreview} 
+            />
+            <Pressable 
+              style={styles.removeButton}
+              onPress={() => {
+                setImage(null);
+                setImagePreview(null);
+              }}
+            >
+              <Text>Remove Image </Text>
+            </Pressable>
+          </View>
         ) : (
-          <Text>Add Event Image</Text>
+          <Text>Add Event Image </Text>
         )}
       </Pressable>
 
@@ -228,7 +251,7 @@ export default function CreateEventScreen(): React.ReactElement {
           onPress={handleRefreshLocation}
           disabled={isLocationLoading}
         >
-          <Text>Use Current Location</Text>
+          <Text>Use Current Location </Text>
         </Pressable>
       </View>
 
@@ -236,7 +259,7 @@ export default function CreateEventScreen(): React.ReactElement {
         {isLocationLoading ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#0000ff" />
-            <Text style={styles.loadingText}>Getting your location...</Text>
+            <Text style={styles.loadingText}>Getting your location...  </Text>
           </View>
         ) : mapRegion ? (
           <MapView
@@ -255,12 +278,11 @@ export default function CreateEventScreen(): React.ReactElement {
           </MapView>
         ) : (
           <View style={styles.placeholderMap}>
-            <Text>Unable to load map</Text>
+            <Text>Unable to load map </Text>
           </View>
         )}
         <Text style={styles.mapInstructions}>
-          Tap on the map to set location or drag the marker
-        </Text>
+          Tap on the map to set location or drag the marker  </Text>
       </View>
 
       <CustomButton 
@@ -308,18 +330,27 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   imageButton: {
-    backgroundColor: 'white',
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#ccc',
     borderRadius: 8,
-    padding: 12,
-    marginBottom: 16,
     alignItems: 'center',
-    justifyContent: 'center',
-    height: 200,
+    marginVertical: 8,
+  },
+  imageContainer: {
+    width: '100%',
+    alignItems: 'center',
   },
   imagePreview: {
     width: '100%',
-    height: '100%',
+    height: 200,
     borderRadius: 8,
+  },
+  removeButton: {
+    marginTop: 8,
+    padding: 8,
+    backgroundColor: '#ff4444',
+    borderRadius: 4,
   },
   mapContainer: {
     height: 300,
@@ -354,5 +385,5 @@ const styles = StyleSheet.create({
     padding: 5,
     borderRadius: 4,
     fontSize: 12,
-  }
+  },
 });
