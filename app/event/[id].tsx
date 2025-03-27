@@ -1,5 +1,5 @@
-import { View, Text, StyleSheet, Image, ScrollView, Pressable } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { View, Text, StyleSheet, Image, ScrollView, ActivityIndicator } from 'react-native';
+import { useLocalSearchParams, Stack } from 'expo-router';
 import { useState, useEffect } from 'react';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../config/firebase';
@@ -7,55 +7,67 @@ import { useTheme } from '../../context/theme.context';
 import { Ionicons } from '@expo/vector-icons';
 import MapView, { Marker } from 'react-native-maps';
 import { format } from 'date-fns';
+import { Event } from '../../services/events.service';
 
 export default function EventScreen() {
-  const { theme } = useTheme();
   const { id } = useLocalSearchParams();
-  const router = useRouter();
-  const [event, setEvent] = useState<any>(null);
+  const [event, setEvent] = useState<Event | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const { theme } = useTheme();
 
   useEffect(() => {
+    const fetchEvent = async () => {
+      try {
+        const eventDoc = await getDoc(doc(db, 'events', id as string));
+        if (eventDoc.exists()) {
+          const data = eventDoc.data();
+          setEvent({
+            id: eventDoc.id,
+            ...data,
+            date: data.date.toDate(),
+            createdAt: data.createdAt.toDate(),
+            updatedAt: data.updatedAt.toDate(),
+          } as Event);
+        } else {
+          setError('Event not found');
+        }
+      } catch (error) {
+        console.error('Error fetching event:', error);
+        setError('Error loading event');
+      } finally {
+        setLoading(false);
+      }
+    };
+
     fetchEvent();
   }, [id]);
-
-  const fetchEvent = async () => {
-    try {
-      const eventDoc = await getDoc(doc(db, 'events', id as string));
-      if (eventDoc.exists()) {
-        setEvent({ id: eventDoc.id, ...eventDoc.data() });
-      }
-    } catch (error) {
-      console.error('Error fetching event:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   if (loading) {
     return (
       <View style={[styles.container, { backgroundColor: theme.background }]}>
-        <Text style={{ color: theme.text }}>Loading...</Text>
+        <ActivityIndicator size="large" color={theme.text} />
       </View>
     );
   }
 
-  if (!event) {
+  if (error || !event) {
     return (
       <View style={[styles.container, { backgroundColor: theme.background }]}>
-        <Text style={{ color: theme.text }}>Event not found</Text>
+        <Text style={[styles.errorText, { color: theme.text }]}>{error}</Text>
       </View>
     );
   }
 
   return (
     <ScrollView style={[styles.container, { backgroundColor: theme.background }]}>
-      <Pressable 
-        style={styles.backButton} 
-        onPress={() => router.back()}
-      >
-        <Ionicons name="arrow-back" size={24} color={theme.text} />
-      </Pressable>
+      <Stack.Screen
+        options={{
+          headerStyle: { backgroundColor: theme.background },
+          headerTintColor: theme.text,
+          title: event.title,
+        }}
+      />
 
       {event.imageUrl ? (
         <Image 
@@ -75,15 +87,13 @@ export default function EventScreen() {
         <View style={styles.infoRow}>
           <Ionicons name="calendar-outline" size={20} color={theme.text} />
           <Text style={[styles.infoText, { color: theme.text }]}>
-            {format(event.date.toDate(), 'PPP')}
-          </Text>
+            {format(event.date, 'PPP')} </Text>
         </View>
 
         <View style={styles.infoRow}>
           <Ionicons name="location-outline" size={20} color={theme.text} />
           <Text style={[styles.infoText, { color: theme.text }]}>
-            {event.location}
-          </Text>
+            {event.location.address} </Text>
         </View>
 
         <Text style={[styles.sectionTitle, { color: theme.text }]}>About</Text>
@@ -96,18 +106,19 @@ export default function EventScreen() {
           <MapView
             style={styles.map}
             initialRegion={{
-              latitude: event.coordinates.lat,
-              longitude: event.coordinates.lon,
+              latitude: event.location.latitude,
+              longitude: event.location.longitude,
               latitudeDelta: 0.01,
               longitudeDelta: 0.01,
             }}
           >
             <Marker
               coordinate={{
-                latitude: event.coordinates.lat,
-                longitude: event.coordinates.lon,
+                latitude: event.location.latitude,
+                longitude: event.location.longitude,
               }}
               title={event.title}
+              description={event.location.address}
             />
           </MapView>
         </View>
@@ -119,15 +130,6 @@ export default function EventScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  backButton: {
-    position: 'absolute',
-    top: 40,
-    left: 16,
-    zIndex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    borderRadius: 20,
-    padding: 8,
   },
   image: {
     width: '100%',
@@ -175,5 +177,10 @@ const styles = StyleSheet.create({
   map: {
     width: '100%',
     height: '100%',
+  },
+  errorText: {
+    fontSize: 16,
+    textAlign: 'center',
+    margin: 16,
   },
 });

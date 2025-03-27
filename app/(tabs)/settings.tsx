@@ -1,12 +1,14 @@
 import React from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Switch } from 'react-native';
 import { useRouter } from 'expo-router';
 import { signOut } from '../../services/auth.service';
 import { useAuth } from '../../context/auth.context';
+import { useTheme } from '../../context/theme.context';
 
 const SettingsScreen = () => {
   const router = useRouter();
   const { user } = useAuth();
+  const { theme, isDark, toggleTheme } = useTheme();
 
   const handleSignOut = async () => {
     try {
@@ -18,15 +20,20 @@ const SettingsScreen = () => {
   };
 
   return (
-    <View style={styles.container}>
-      <View style={styles.profileSection}>
-        <Text style={styles.displayName}>{user?.displayName}</Text>
-        <Text style={styles.email}>{user?.email}</Text>
+    <View style={[styles.container, { backgroundColor: theme.background }]}>
+      <View style={[styles.profileSection, { backgroundColor: theme.card }]}>
+        <Text style={[styles.displayName, { color: theme.text }]}>{user?.displayName}</Text>
+        <Text style={[styles.email, { color: theme.text }]}>{user?.email}</Text>
       </View>
 
-      <View style={styles.settingsSection}>
+      <View style={[styles.settingsSection, { backgroundColor: theme.card }]}>
+        <View style={styles.settingRow}>
+          <Text style={[styles.settingText, { color: theme.text }]}>Dark Mode</Text>
+          <Switch value={isDark} onValueChange={toggleTheme} />
+        </View>
+        
         <Pressable 
-          style={styles.button}
+          style={[styles.button, { backgroundColor: theme.error }]}
           onPress={handleSignOut}
         >
           <Text style={styles.buttonText}>Sign Out</Text>
@@ -43,9 +50,21 @@ const styles = StyleSheet.create({
   },
   profileSection: {
     padding: 16,
-    backgroundColor: 'white',
     borderRadius: 8,
     marginBottom: 16,
+  },
+  settingsSection: {
+    borderRadius: 8,
+    padding: 16,
+  },
+  settingRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  settingText: {
+    fontSize: 16,
   },
   displayName: {
     fontSize: 24,
@@ -54,15 +73,9 @@ const styles = StyleSheet.create({
   },
   email: {
     fontSize: 16,
-    color: '#666',
-  },
-  settingsSection: {
-    backgroundColor: 'white',
-    borderRadius: 8,
-    padding: 16,
+    opacity: 0.7,
   },
   button: {
-    backgroundColor: '#ff4444',
     padding: 16,
     borderRadius: 8,
     alignItems: 'center',
@@ -74,3 +87,4 @@ const styles = StyleSheet.create({
 });
 
 export default SettingsScreen;
+

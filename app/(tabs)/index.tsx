@@ -5,8 +5,10 @@ import { EventCard } from '../../components/events/EventCard';
 import { collection, query, orderBy, getDocs } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { Event } from '../../services/events.service';
+import { useTheme } from '../../context/theme.context';
 
 export default function ExploreScreen() {
+  const { theme } = useTheme();
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -42,14 +44,14 @@ export default function ExploreScreen() {
 
   if (loading) {
     return (
-      <View style={[styles.container, styles.centered]}>
-        <ActivityIndicator size="large" />
+      <View style={[styles.container, styles.centered, { backgroundColor: theme.background }]}>
+        <ActivityIndicator size="large" color={theme.primary} />
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: theme.background }]}>
       <FlashList
         data={events}
         renderItem={({ item }) => <EventCard event={item} />}
@@ -58,6 +60,7 @@ export default function ExploreScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
+            tintColor={theme.text}
           />
         }
       />
@@ -68,10 +71,9 @@ export default function ExploreScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
   },
   centered: {
     justifyContent: 'center',
     alignItems: 'center',
-  }
+  },
 });

@@ -1,64 +1,48 @@
-import { 
-  TouchableOpacity, 
-  Text, 
-  StyleSheet, 
-  ActivityIndicator,
-  TouchableOpacityProps 
-} from 'react-native';
+import { Pressable, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import { useTheme } from '../../context/theme.context';
 
-interface CustomButtonProps extends TouchableOpacityProps {
+interface CustomButtonProps {
+  onPress: () => void;
   title: string;
   loading?: boolean;
-  variant?: 'primary' | 'secondary';
+  secondary?: boolean;
+  disabled?: boolean;
 }
 
-export function CustomButton({ 
-  title, 
-  loading = false, 
-  variant = 'primary',
-  disabled,
-  style,
-  ...props 
-}: CustomButtonProps) {
+export function CustomButton({ onPress, title, loading, secondary, disabled }: CustomButtonProps) {
+  const { theme } = useTheme();
+
   return (
-    <TouchableOpacity
+    <Pressable
       style={[
         styles.button,
-        variant === 'secondary' && styles.buttonSecondary,
+        { backgroundColor: secondary ? 'transparent' : theme.primary },
+        secondary && { borderColor: theme.primary, borderWidth: 1 },
         disabled && styles.buttonDisabled,
-        style
       ]}
+      onPress={onPress}
       disabled={disabled || loading}
-      {...props}
     >
       {loading ? (
-        <ActivityIndicator color={variant === 'primary' ? '#fff' : '#007AFF'} />
+        <ActivityIndicator color={secondary ? theme.primary : 'white'} />
       ) : (
-        <Text 
-          style={[
-            styles.text,
-            variant === 'secondary' && styles.textSecondary
-          ]}
-        >
+        <Text style={[
+          styles.text,
+          secondary && { color: theme.primary },
+        ]}>
           {title}
         </Text>
       )}
-    </TouchableOpacity>
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   button: {
-    backgroundColor: '#007AFF',
     padding: 16,
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  buttonSecondary: {
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: '#007AFF',
   },
   buttonDisabled: {
     opacity: 0.5,
@@ -67,8 +51,5 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
-  },
-  textSecondary: {
-    color: '#007AFF',
   },
 }); 

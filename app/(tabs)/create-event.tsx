@@ -11,6 +11,7 @@ import { format } from 'date-fns';
 import MapView, { Marker, Region } from 'react-native-maps';
 import { LocationService, UserLocation } from '../../services/location.service';
 import { CloudinaryService } from '../../services/cloudinary.service';
+import { useTheme } from '../../context/theme.context';
 
 // Define the schema for validation
 const schema = yup.object().shape({
@@ -22,6 +23,7 @@ const schema = yup.object().shape({
 });
 
 export default function CreateEventScreen(): React.ReactElement {
+  const { theme } = useTheme();
   const [title, setTitle] = useState<string>('');
   const [date, setDate] = useState<Date>(new Date());
   const [showDatePicker, setShowDatePicker] = useState<boolean>(false);
@@ -144,16 +146,17 @@ export default function CreateEventScreen(): React.ReactElement {
 
       const eventData = {
         title,
-        date,
-        location,
         description,
-        imageUrl: finalImageUrl || '',
-        coordinates: {
-          lat: markerCoordinates.latitude,
-          lon: markerCoordinates.longitude,
+        date: new Date(date),
+        location: {
+          latitude: markerCoordinates.latitude,
+          longitude: markerCoordinates.longitude,
+          address: location,
         },
+        imageUrl: finalImageUrl,
+        createdBy: auth.currentUser?.uid || '',
         createdAt: new Date(),
-        createdBy: auth.currentUser?.uid,
+        updatedAt: new Date(),
       };
 
       console.log('Event data being saved:', eventData);
@@ -174,19 +177,26 @@ export default function CreateEventScreen(): React.ReactElement {
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+    <ScrollView style={[styles.container, { backgroundColor: theme.background }]}>
       <TextInput
-        style={styles.input}
+        style={[styles.input, { 
+          backgroundColor: theme.card,
+          color: theme.text,
+          borderColor: theme.border
+        }]}
         placeholder="Event Title"
+        placeholderTextColor={theme.text}
         value={title}
         onChangeText={setTitle}
       />
       
       <Pressable 
-        style={styles.dateButton}
+        style={[styles.input, { backgroundColor: theme.card }]}
         onPress={() => setShowDatePicker(true)}
       >
-        <Text>{format(date, 'PPP')}</Text>
+        <Text style={{ color: theme.text }}>
+          {date ? format(date, 'PPP') : 'Select Date'}
+        </Text>
       </Pressable>
 
       {showDatePicker && (
@@ -202,10 +212,14 @@ export default function CreateEventScreen(): React.ReactElement {
         />
       )}
 
-
       <TextInput
-        style={[styles.input, styles.textArea]}
+        style={[styles.input, styles.textArea, { 
+          backgroundColor: theme.card,
+          color: theme.text,
+          borderColor: theme.border
+        }]}
         placeholder="Description"
+        placeholderTextColor={theme.text}
         value={description}
         onChangeText={setDescription}
         multiline
@@ -220,34 +234,33 @@ export default function CreateEventScreen(): React.ReactElement {
               style={styles.imagePreview} 
             />
             <Pressable 
-              style={styles.removeButton}
+              style={[styles.removeButton, { backgroundColor: theme.error }]}
               onPress={() => {
                 setImage(null);
                 setImagePreview(null);
               }}
             >
-              <Text>Remove Image </Text>
+              <Text style={{ color: 'white' }}>Remove Image</Text>
             </Pressable>
           </View>
         ) : (
-          <Text>Add Event Image </Text>
+          <Text style={{ color: theme.text }}>Add Event Image </Text>
         )}
       </Pressable>
 
-      <View style={styles.locationContainer}>
+      <View style={[styles.locationContainer, { backgroundColor: theme.card }]}>
         <TextInput
-          style={styles.input}
+          style={[styles.locationInput, { color: theme.text }]}
           placeholder="Location"
+          placeholderTextColor={theme.text}
           value={location}
           onChangeText={setLocation}
         />
-        <Pressable 
-          style={styles.locationButton} 
+        <CustomButton
+          title="Use Current Location"
           onPress={handleRefreshLocation}
-          disabled={isLocationLoading}
-        >
-          <Text>Use Current Location </Text>
-        </Pressable>
+          secondary
+        />
       </View>
 
       <View style={styles.mapContainer}>
@@ -280,9 +293,9 @@ export default function CreateEventScreen(): React.ReactElement {
           Tap on the map to set location or drag the marker  </Text>
       </View>
 
-      <CustomButton 
-        onPress={handleSubmit}
+      <CustomButton
         title="Create Event"
+        onPress={handleSubmit}
         loading={isLoading}
       />
     </ScrollView>
@@ -292,42 +305,33 @@ export default function CreateEventScreen(): React.ReactElement {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
-  },
-  contentContainer: {
     padding: 16,
-    paddingBottom: 32,
   },
   input: {
-    backgroundColor: 'white',
+    height: 40,
+    borderWidth: 1,
     borderRadius: 8,
-    padding: 12,
+    paddingHorizontal: 10,
     marginBottom: 16,
   },
   textArea: {
     height: 100,
     textAlignVertical: 'top',
-  },
-  dateButton: {
-    backgroundColor: 'white',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 16,
+    paddingTop: 10,
   },
   locationContainer: {
     marginBottom: 8,
   },
-  locationButton: {
-    backgroundColor: '#e0e0e0',
-    padding: 10,
+  locationInput: {
+    height: 40,
+    borderWidth: 1,
     borderRadius: 8,
-    alignItems: 'center',
-    marginBottom: 16,
+    paddingHorizontal: 10,
+    marginBottom: 8,
   },
   imageButton: {
     padding: 16,
     borderWidth: 1,
-    borderColor: '#ccc',
     borderRadius: 8,
     alignItems: 'center',
     marginVertical: 8,
@@ -344,7 +348,6 @@ const styles = StyleSheet.create({
   removeButton: {
     marginTop: 8,
     padding: 8,
-    backgroundColor: '#ff4444',
     borderRadius: 4,
   },
   mapContainer: {

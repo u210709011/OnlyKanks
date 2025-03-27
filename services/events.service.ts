@@ -8,7 +8,7 @@ export interface Event {
   id: string;
   title: string;
   description: string;
-  date: Date;
+  date: any;
   location: {
     latitude: number;
     longitude: number;
@@ -16,8 +16,8 @@ export interface Event {
   };
   imageUrl?: string;
   createdBy: string;
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: any;
+  updatedAt: any;
 }
 
 export class EventsService {
