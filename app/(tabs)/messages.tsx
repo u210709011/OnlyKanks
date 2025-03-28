@@ -17,6 +17,13 @@ export default function MessagesScreen() {
   const loadChats = async () => {
     try {
       setLoading(true);
+      
+      // Migrate old chat format to new format
+      await MessagesService.migrateChatsToNewFormat().catch(error => {
+        console.error('Error migrating chats:', error);
+        // Continue even if migration fails
+      });
+      
       const chatsData = await MessagesService.getChats();
       setChats(chatsData);
     } catch (error) {

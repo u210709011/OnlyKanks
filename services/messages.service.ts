@@ -17,7 +17,7 @@ export interface Chat {
   lastMessage?: string;
   lastMessageDate?: any;
   lastMessageSenderId?: string;
-  unreadCount: number;
+  unreadCounts: { [userId: string]: number };
 }
 
 export class MessagesService {
@@ -43,13 +43,17 @@ export class MessagesService {
       return existingChat.id;
     }
 
-    // Create new chat if none exists
+    // Create new chat if none exists with initialized unread counts for both users
+    const unreadCounts: { [key: string]: number } = {};
+    unreadCounts[currentUserId] = 0;
+    unreadCounts[otherUserId] = 0;
+
     const newChat = {
       participants: [currentUserId, otherUserId],
       createdAt: new Date(),
       lastMessageDate: new Date(),
       lastMessage: '',
-      unreadCount: 0,
+      unreadCounts,
     };
 
     const docRef = await addDoc(chatsRef, newChat);
@@ -93,15 +97,25 @@ export class MessagesService {
     const messageRef = doc(collection(db, collections.MESSAGES));
     batch.set(messageRef, message);
 
-    // Update the chat with the last sender information
-    batch.update(chatRef, {
+    // Get existing unread counts or initialize if missing
+    const unreadCounts = chatData.unreadCounts || {};
+    
+    // Set up the update object
+    const updateData: any = {
       lastMessage: content,
       lastMessageDate: new Date(),
       lastMessageSenderId: auth.currentUser.uid,
-      // Only increment unread count for the receiver, not the sender
-      unreadCount: increment(1)
-    });
+    };
 
+    // Increment unread count only for the receiver, not the sender
+    updateData[`unreadCounts.${receiverId}`] = (unreadCounts[receiverId] || 0) + 1;
+    
+    // Always ensure sender's unread count is zero
+    updateData[`unreadCounts.${auth.currentUser.uid}`] = 0;
+
+    // Apply the updates
+    batch.update(chatRef, updateData);
+    
     await batch.commit();
     return chatId;
   }
@@ -117,10 +131,27 @@ export class MessagesService {
     );
 
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    })) as Chat[];
+    return snapshot.docs.map(doc => {
+      const data = doc.data();
+      // For backward compatibility
+      let unreadCount = 0;
+      
+      // If we have the new unreadCounts map, use the current user's count
+      if (data.unreadCounts && auth.currentUser && data.unreadCounts[auth.currentUser.uid] !== undefined) {
+        unreadCount = data.unreadCounts[auth.currentUser.uid];
+      } else if (data.unreadCount !== undefined) {
+        // For backward compatibility with old data
+        unreadCount = data.unreadCount;
+      }
+      
+      // Include both properties to support transition
+      return {
+        id: doc.id,
+        ...data,
+        unreadCount, // For backward compatibility
+        unreadCounts: data.unreadCounts || {} // Ensure unreadCounts exists
+      } as unknown as Chat;
+    });
   }
 
   static async subscribeToMessages(chatId: string, callback: (messages: Message[]) => void) {
@@ -169,28 +200,73 @@ export class MessagesService {
     // Only mark as read if user is a participant
     if (!chatData.participants.includes(auth.currentUser.uid)) return;
 
-    // Only reset unread count if the last message wasn't sent by the current user
-    if (chatData.lastMessageSenderId !== auth.currentUser.uid) {
-      const batch = writeBatch(db);
+    const batch = writeBatch(db);
 
-      // Update chat unread count
-      batch.update(chatRef, {
-        unreadCount: 0
-      });
+    // Update only this user's unread count to zero
+    batch.update(chatRef, {
+      [`unreadCounts.${auth.currentUser.uid}`]: 0
+    });
 
-      // Mark all messages as read
-      const q = query(
-        collection(db, collections.MESSAGES),
-        where('chatId', '==', chatId),
-        where('receiverId', '==', auth.currentUser.uid),
-        where('read', '==', false)
-      );
+    // Mark all messages as read that were sent TO the current user
+    const q = query(
+      collection(db, collections.MESSAGES),
+      where('chatId', '==', chatId),
+      where('receiverId', '==', auth.currentUser.uid),
+      where('read', '==', false)
+    );
 
-      const unreadMessages = await getDocs(q);
-      unreadMessages.docs.forEach(doc => {
-        batch.update(doc.ref, { read: true });
-      });
+    const unreadMessages = await getDocs(q);
+    unreadMessages.docs.forEach(doc => {
+      batch.update(doc.ref, { read: true });
+    });
 
+    await batch.commit();
+  }
+
+  // Add a migration helper to upgrade old chat documents
+  static async migrateChatsToNewFormat(): Promise<void> {
+    if (!auth.currentUser) throw new Error('Not authenticated');
+
+    const chatsRef = collection(db, collections.CHATS);
+    const q = query(
+      chatsRef,
+      where('participants', 'array-contains', auth.currentUser.uid)
+    );
+
+    const snapshot = await getDocs(q);
+    const batch = writeBatch(db);
+    let batchCount = 0;
+    const maxBatchSize = 500; // Firestore batch limit
+
+    for (const doc of snapshot.docs) {
+      const data = doc.data();
+      // Check if this chat needs migration (has unreadCount but no unreadCounts)
+      if (data.unreadCount !== undefined && !data.unreadCounts) {
+        const unreadCounts: { [key: string]: number } = {};
+        
+        // Initialize unread counts for all participants
+        for (const participantId of data.participants) {
+          // If this is the current user, set to 0, otherwise preserve the original count
+          unreadCounts[participantId] = participantId === auth.currentUser.uid ? 0 : data.unreadCount;
+        }
+
+        batch.update(doc.ref, {
+          unreadCounts,
+          // Don't delete unreadCount yet for backward compatibility
+        });
+
+        batchCount++;
+        
+        // If we've reached the batch limit, commit and start a new batch
+        if (batchCount >= maxBatchSize) {
+          await batch.commit();
+          batchCount = 0;
+        }
+      }
+    }
+
+    // Commit any remaining updates
+    if (batchCount > 0) {
       await batch.commit();
     }
   }
