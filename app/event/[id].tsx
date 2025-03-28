@@ -1,5 +1,5 @@
-import { View, Text, StyleSheet, Image, ScrollView, ActivityIndicator } from 'react-native';
-import { useLocalSearchParams, Stack } from 'expo-router';
+import { View, Text, StyleSheet, Image, ScrollView, ActivityIndicator, Pressable } from 'react-native';
+import { useLocalSearchParams, Stack, useRouter } from 'expo-router';
 import { useState, useEffect } from 'react';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../config/firebase';
@@ -8,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import MapView, { Marker } from 'react-native-maps';
 import { format } from 'date-fns';
 import { Event } from '../../services/events.service';
+import { UserService } from '../../services/user.service';
 
 export default function EventScreen() {
   const { id } = useLocalSearchParams();
@@ -15,20 +16,29 @@ export default function EventScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { theme } = useTheme();
+  const router = useRouter();
+  const [creator, setCreator] = useState<{ displayName: string; photoURL?: string; bio?: string } | null>(null);
 
   useEffect(() => {
-    const fetchEvent = async () => {
+    const fetchEventAndCreator = async () => {
       try {
         const eventDoc = await getDoc(doc(db, 'events', id as string));
         if (eventDoc.exists()) {
           const data = eventDoc.data();
-          setEvent({
+          const eventData = {
             id: eventDoc.id,
             ...data,
             date: data.date.toDate(),
             createdAt: data.createdAt.toDate(),
             updatedAt: data.updatedAt.toDate(),
-          } as Event);
+          } as Event;
+          setEvent(eventData);
+
+          // Fetch creator information
+          const creatorData = await UserService.getUser(eventData.createdBy);
+          if (creatorData) {
+            setCreator(creatorData);
+          }
         } else {
           setError('Event not found');
         }
@@ -40,7 +50,7 @@ export default function EventScreen() {
       }
     };
 
-    fetchEvent();
+    fetchEventAndCreator();
   }, [id]);
 
   if (loading) {
@@ -84,6 +94,33 @@ export default function EventScreen() {
       <View style={styles.content}>
         <Text style={[styles.title, { color: theme.text }]}>{event.title}</Text>
         
+        {/* Creator information */}
+        <Pressable 
+          style={styles.creatorSection}
+          onPress={() => router.push(`/profile/${event.createdBy}`)}
+        >
+          <View style={styles.creatorHeader}>
+            {creator?.photoURL ? (
+              <Image 
+                source={{ uri: creator.photoURL }} 
+                style={styles.creatorImage}
+              />
+            ) : (
+              <View style={[styles.creatorImagePlaceholder, { backgroundColor: theme.border }]}>
+                <Ionicons name="person" size={20} color={theme.text} />
+              </View>
+            )}
+            <View style={styles.creatorInfo}>
+              <Text style={[styles.creatorName, { color: theme.text }]}>
+                {creator?.displayName || 'Unknown User'}
+              </Text>
+              <Text style={[styles.creatorBio, { color: theme.text }]} numberOfLines={2}>
+                {creator?.bio || 'No bio available'}
+              </Text>
+            </View>
+          </View>
+        </Pressable>
+
         <View style={styles.infoRow}>
           <Ionicons name="calendar-outline" size={20} color={theme.text} />
           <Text style={[styles.infoText, { color: theme.text }]}>
@@ -182,5 +219,40 @@ const styles = StyleSheet.create({
     fontSize: 16,
     textAlign: 'center',
     margin: 16,
+  },
+  creatorSection: {
+    marginVertical: 16,
+    padding: 12,
+    borderRadius: 8,
+    backgroundColor: 'rgba(0,0,0,0.05)',
+  },
+  creatorHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  creatorImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+  },
+  creatorImagePlaceholder: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  creatorInfo: {
+    marginLeft: 12,
+    flex: 1,
+  },
+  creatorName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  creatorBio: {
+    fontSize: 14,
+    opacity: 0.7,
+    marginTop: 2,
   },
 });

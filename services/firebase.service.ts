@@ -12,8 +12,10 @@ import {
 import { db } from '../config/firebase';
 
 export const collections = {
-  USERS: 'users',
   EVENTS: 'events',
+  USERS: 'users',
+  MESSAGES: 'messages',
+  CHATS: 'chats',
   LOCATIONS: 'locations',
 } as const;
 

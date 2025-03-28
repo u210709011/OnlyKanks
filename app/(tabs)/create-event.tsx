@@ -244,7 +244,7 @@ export default function CreateEventScreen(): React.ReactElement {
             </Pressable>
           </View>
         ) : (
-          <Text style={{ color: theme.text }}>Add Event Image </Text>
+          <Text style={{ color: theme.text, width: '100%', textAlign: 'center' }}>Add Event Image</Text>
         )}
       </Pressable>
 

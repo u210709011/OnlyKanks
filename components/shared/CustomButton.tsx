@@ -1,55 +1,56 @@
-import { Pressable, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import { TouchableOpacity, Text, StyleSheet, ActivityIndicator, StyleProp, ViewStyle } from 'react-native';
 import { useTheme } from '../../context/theme.context';
 
 interface CustomButtonProps {
-  onPress: () => void;
   title: string;
+  onPress: () => void;
   loading?: boolean;
   secondary?: boolean;
-  disabled?: boolean;
+  style?: StyleProp<ViewStyle>;
 }
 
-export function CustomButton({ onPress, title, loading, secondary, disabled }: CustomButtonProps) {
+export const CustomButton: React.FC<CustomButtonProps> = ({
+  title,
+  onPress,
+  loading = false,
+  secondary = false,
+  style,
+}) => {
   const { theme } = useTheme();
 
   return (
-    <Pressable
+    <TouchableOpacity
       style={[
         styles.button,
-        { backgroundColor: secondary ? 'transparent' : theme.primary },
-        secondary && { borderColor: theme.primary, borderWidth: 1 },
-        disabled && styles.buttonDisabled,
+        { backgroundColor: secondary ? theme.card : theme.primary },
+        style,
       ]}
       onPress={onPress}
-      disabled={disabled || loading}
+      disabled={loading}
     >
       {loading ? (
-        <ActivityIndicator color={secondary ? theme.primary : 'white'} />
+        <ActivityIndicator color="white" />
       ) : (
         <Text style={[
           styles.text,
-          secondary && { color: theme.primary },
+          { color: secondary ? theme.text : 'white' }
         ]}>
           {title}
         </Text>
       )}
-    </Pressable>
+    </TouchableOpacity>
   );
-}
+};
 
 const styles = StyleSheet.create({
   button: {
-    padding: 16,
+    padding: 12,
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  buttonDisabled: {
-    opacity: 0.5,
-  },
   text: {
-    color: '#fff',
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: 'bold',
   },
 }); 

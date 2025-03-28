@@ -4,6 +4,9 @@ import { Event } from '../../services/events.service';
 import { useTheme } from '../../context/theme.context';
 import { Ionicons } from '@expo/vector-icons';
 import { format } from 'date-fns';
+import { useState, useEffect } from 'react';
+import { UserService } from '../../services/user.service';
+
 interface EventCardProps {
   event: Event;
 }
@@ -11,6 +14,23 @@ interface EventCardProps {
 export const EventCard: React.FC<EventCardProps> = ({ event }) => {
   const router = useRouter();
   const { theme } = useTheme();
+  const [creator, setCreator] = useState<{ displayName: string; photoURL?: string } | null>(null);
+  
+  useEffect(() => {
+    const fetchCreator = async () => {
+      try {
+        const userData = await UserService.getUser(event.createdBy);
+        if (userData) {
+          setCreator(userData);
+        }
+      } catch (error) {
+        console.error('Error fetching creator:', error);
+      }
+    };
+    
+    fetchCreator();
+  }, [event.createdBy]);
+
   console.log('Type:', typeof event.date);
 console.log('Instance of Date:', event.date instanceof Date);
 console.log('Raw event.date:', event.date);
@@ -42,17 +62,36 @@ console.log('Stringified:', JSON.stringify(event.date, null, 2));
         <View style={styles.detailsContainer}>
           <View style={styles.detailRow}>
             <Ionicons name="calendar-outline" size={16} color={theme.text} />
-            <Text style={[styles.detailText, { color: theme.text }]} numberOfLines={1}>
-            {format(event.date.toDate(), 'MMM d, yyyy')}
+            <Text 
+              style={[styles.detailText, { color: theme.text, flex: 1 }]} 
+              numberOfLines={1}
+            >
+              {format(event.date.toDate(), 'MMM d, yyyy')}
             </Text>
           </View>
           
           <View style={styles.detailRow}>
             <Ionicons name="location-outline" size={16} color={theme.text} />
-            <Text style={[styles.detailText, { color: theme.text }]} numberOfLines={1}>
+            <Text 
+              style={[styles.detailText, { color: theme.text, flex: 1 }]} 
+              numberOfLines={1}
+            >
               {event.location.address}
             </Text>
           </View>
+
+          <Pressable 
+            style={styles.detailRow}
+            onPress={() => router.push(`/profile/${event.createdBy}`)}
+          >
+            <Ionicons name="person-outline" size={16} color={theme.text} />
+            <Text 
+              style={[styles.detailText, styles.creatorName, { color: theme.text, flex: 1 }]} 
+              numberOfLines={1}
+            >
+              {creator?.displayName || 'Unknown User'}
+            </Text>
+          </Pressable>
         </View>
       </View>
     </Pressable>
@@ -95,15 +134,20 @@ const styles = StyleSheet.create({
   },
   detailsContainer: {
     justifyContent: 'flex-end',
+    flex: 1,
   },
   detailRow: {
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: 4,
+    paddingRight: 8,
   },
   detailText: {
     fontSize: 14,
     marginLeft: 4,
     opacity: 0.8,
+  },
+  creatorName: {
+    textDecorationLine: 'underline',
   },
 }); 
