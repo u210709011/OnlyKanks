@@ -2,6 +2,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { useTheme } from '../../context/theme.context';
 import { Message } from '../../services/messages.service';
 import { format } from 'date-fns';
+import { Ionicons } from '@expo/vector-icons';
 
 interface MessageBubbleProps {
   message: Message;
@@ -10,6 +11,21 @@ interface MessageBubbleProps {
 
 export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, isOwn }) => {
   const { theme } = useTheme();
+
+  // Only show status indicators for own messages
+  const renderMessageStatus = () => {
+    if (!isOwn) return null;
+    
+    return (
+      <View style={styles.statusContainer}>
+        {message.read ? (
+          <Ionicons name="checkmark-done" size={14} color="rgba(255,255,255,0.8)" />
+        ) : (
+          <Ionicons name="checkmark" size={14} color="rgba(255,255,255,0.8)" />
+        )}
+      </View>
+    );
+  };
 
   return (
     <View style={[
@@ -26,12 +42,15 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, isOwn }) 
         ]}>
           {message.content} 
         </Text>
-        <Text style={[
-          styles.time,
-          { color: isOwn ? 'rgba(255,255,255,0.7)' : theme.text }
-        ]}>
-          {format(message.createdAt.toDate(), 'HH:mm')}
-        </Text>
+        <View style={styles.metaContainer}>
+          {renderMessageStatus()}
+          <Text style={[
+            styles.time,
+            { color: isOwn ? 'rgba(255,255,255,0.7)' : theme.text }
+          ]}>
+            {format(message.createdAt.toDate(), 'HH:mm')}
+          </Text>
+        </View>
       </View>
     </View>
   );
@@ -65,12 +84,18 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     flexWrap: 'wrap',
   },
+  metaContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    marginTop: 4,
+  },
+  statusContainer: {
+    marginRight: 4,
+  },
   time: {
     fontSize: 12,
     opacity: 0.7,
-    marginTop: 4,
     fontFamily: 'Roboto',
-    alignSelf: 'flex-end',
-    paddingLeft: 8,
   },
 }); 

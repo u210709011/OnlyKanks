@@ -1,6 +1,6 @@
 import { View, Text, StyleSheet, FlatList, Image, Pressable, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { useTheme } from '../../context/theme.context';
 import { FriendsService, FriendRequestStatus, FriendRequest, Friend } from '../../services/friends.service';
@@ -162,9 +162,15 @@ export default function FriendsScreen() {
   const [requests, setRequests] = useState<FriendRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'friends' | 'requests'>('friends');
+  const isLoadingRef = useRef(false);
+  const lastLoadTime = useRef(Date.now());
 
   const loadData = async () => {
+    // Prevent duplicate loading
+    if (isLoadingRef.current) return;
+    
     try {
+      isLoadingRef.current = true;
       setLoading(true);
       
       // Load friends
@@ -174,16 +180,28 @@ export default function FriendsScreen() {
       // Load friend requests
       const requestsData = await FriendsService.getIncomingFriendRequests();
       setRequests(requestsData);
+      
+      // Update last load time
+      lastLoadTime.current = Date.now();
     } catch (error) {
       console.error('Error loading data:', error);
     } finally {
       setLoading(false);
+      isLoadingRef.current = false;
     }
   };
 
   useFocusEffect(
     useCallback(() => {
-      loadData();
+      // Only load if:
+      // 1. We don't have any friends/requests data yet, or
+      // 2. It's been more than 30 seconds since last load
+      if (
+        (friends.length === 0 && requests.length === 0) || 
+        Date.now() - lastLoadTime.current > 30000
+      ) {
+        loadData();
+      }
     }, [])
   );
 

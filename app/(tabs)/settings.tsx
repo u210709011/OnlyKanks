@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TextInput, Image, Pressable, ScrollView, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
-import { signOut } from 'firebase/auth';
 import { useAuth } from '../../context/auth.context';
 import { useTheme } from '../../context/theme.context';
 import { CustomButton } from '../../components/shared/CustomButton';
@@ -10,6 +9,7 @@ import { User, UserService } from '../../services/user.service';
 import * as ImagePicker from 'expo-image-picker';
 import { CloudinaryService } from '../../services/cloudinary.service';
 import { Ionicons } from '@expo/vector-icons';
+import { signOut } from '../../services/auth.service';
 
 const SettingsScreen = () => {
   const router = useRouter();
@@ -44,10 +44,14 @@ const SettingsScreen = () => {
 
   const handleSignOut = async () => {
     try {
-      await signOut(auth);
+      setLoading(true);
+      await signOut();
       router.replace('/sign-in');
     } catch (error) {
       console.error('Error signing out:', error);
+      Alert.alert('Error', 'Failed to sign out');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -170,11 +174,13 @@ const SettingsScreen = () => {
                 { 
                   text: 'Restart', 
                   style: 'destructive',
-                  onPress: () => {
-                    // For now this will just sign out, which forces a restart of the app flow
-                    signOut(auth)
-                      .then(() => router.replace('/sign-in'))
-                      .catch(err => console.error('Error signing out:', err));
+                  onPress: async () => {
+                    try {
+                      await signOut();
+                      router.replace('/sign-in');
+                    } catch (err) {
+                      console.error('Error signing out:', err);
+                    }
                   }
                 }
               ]

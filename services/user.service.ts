@@ -1,7 +1,8 @@
 import { FirebaseService, collections } from './firebase.service';
 import { auth } from '../config/firebase';
-import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, serverTimestamp, onSnapshot, collection, query, where, Timestamp } from 'firebase/firestore';
 import { db } from '../config/firebase';
+import { deleteField } from 'firebase/firestore';
 
 export interface User {
   id: string;
@@ -9,8 +10,10 @@ export interface User {
   email: string;
   photoURL?: string;
   bio?: string;
-  createdAt: any;
-  updatedAt: any;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+  lastSeen?: Timestamp;
+  isOnline?: boolean;
 }
 
 export class UserService {
@@ -57,5 +60,39 @@ export class UserService {
       console.error('Error creating user:', error);
       throw error;
     }
+  }
+
+  static async updateOnlineStatus(status: boolean): Promise<void> {
+    try {
+      const currentUser = auth.currentUser;
+      if (!currentUser) throw new Error('No authenticated user');
+
+      const userRef = doc(db, collections.USERS, currentUser.uid);
+      
+      await updateDoc(userRef, {
+        isOnline: status,
+        lastSeen: status ? deleteField() : serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+    } catch (error) {
+      console.error('Error updating online status:', error);
+      throw error;
+    }
+  }
+
+  static subscribeToUserPresence(userId: string, callback: (isOnline: boolean, lastSeen?: Date) => void): () => void {
+    const userRef = doc(db, collections.USERS, userId);
+    
+    return onSnapshot(userRef, (doc) => {
+      if (doc.exists()) {
+        const userData = doc.data() as User;
+        callback(
+          userData.isOnline || false, 
+          userData.lastSeen ? userData.lastSeen.toDate() : undefined
+        );
+      } else {
+        callback(false);
+      }
+    });
   }
 } 

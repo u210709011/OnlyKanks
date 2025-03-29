@@ -33,7 +33,7 @@ export const CustomButton: React.FC<CustomButtonProps> = ({
       ) : (
         <Text style={[
           styles.text,
-          { color: secondary ? theme.text : 'white' }
+          { color: secondary ? theme.text : 'white', fontFamily: 'Roboto' }
         ]}>
           {title}
         </Text>
@@ -52,5 +52,6 @@ const styles = StyleSheet.create({
   text: {
     fontSize: 16,
     fontWeight: 'bold',
+    fontFamily: 'Roboto',
   },
 }); 

@@ -7,7 +7,7 @@ import { db, storage, auth } from '../../config/firebase';
 import { CustomButton } from '../../components/shared/CustomButton';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as ImagePicker from 'expo-image-picker';
-import { format } from 'date-fns';
+import { format, startOfDay } from 'date-fns';
 import MapView, { Marker, Region } from 'react-native-maps';
 import { LocationService, UserLocation } from '../../services/location.service';
 import { CloudinaryService } from '../../services/cloudinary.service';
@@ -23,7 +23,7 @@ const schema = yup.object().shape({
 });
 
 export default function CreateEventScreen(): React.ReactElement {
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   const [title, setTitle] = useState<string>('');
   const [date, setDate] = useState<Date>(new Date());
   const [showDatePicker, setShowDatePicker] = useState<boolean>(false);
@@ -38,6 +38,7 @@ export default function CreateEventScreen(): React.ReactElement {
   const [markerCoordinates, setMarkerCoordinates] = useState<{latitude: number, longitude: number} | null>(null);
   const [imageUrl, setImageUrl] = useState<string>('');
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const today = startOfDay(new Date());
 
   // Get user's current location on component mount
   useEffect(() => {
@@ -182,7 +183,8 @@ export default function CreateEventScreen(): React.ReactElement {
         style={[styles.input, { 
           backgroundColor: theme.card,
           color: theme.text,
-          borderColor: theme.border
+          borderColor: theme.border,
+          fontFamily: 'Roboto'
         }]}
         placeholder="Event Title"
         placeholderTextColor={theme.text}
@@ -194,7 +196,7 @@ export default function CreateEventScreen(): React.ReactElement {
         style={[styles.input, { backgroundColor: theme.card }]}
         onPress={() => setShowDatePicker(true)}
       >
-        <Text style={{ color: theme.text }}>
+        <Text style={{ color: theme.text, fontFamily: 'Roboto' }}>
           {date ? format(date, 'PPP') : 'Select Date'}
         </Text>
       </Pressable>
@@ -203,6 +205,9 @@ export default function CreateEventScreen(): React.ReactElement {
         <DateTimePicker
           value={date}
           mode="date"
+          display="default"
+          minimumDate={today}
+          themeVariant={isDark ? "dark" : "light"}
           onChange={(event, selectedDate) => {
             setShowDatePicker(false);
             if (selectedDate) {
@@ -216,7 +221,8 @@ export default function CreateEventScreen(): React.ReactElement {
         style={[styles.input, styles.textArea, { 
           backgroundColor: theme.card,
           color: theme.text,
-          borderColor: theme.border
+          borderColor: theme.border,
+          fontFamily: 'Roboto'
         }]}
         placeholder="Description"
         placeholderTextColor={theme.text}
@@ -240,17 +246,20 @@ export default function CreateEventScreen(): React.ReactElement {
                 setImagePreview(null);
               }}
             >
-              <Text style={{ color: 'white' }}>Remove Image</Text>
+              <Text style={{ color: 'white', fontFamily: 'Roboto' }}>Remove Image</Text>
             </Pressable>
           </View>
         ) : (
-          <Text style={{ color: theme.text, width: '100%', textAlign: 'center' }}>Add Event Image</Text>
+          <Text style={{ color: theme.text, width: '100%', textAlign: 'center', fontFamily: 'Roboto' }}>Add Event Image</Text>
         )}
       </Pressable>
 
       <View style={[styles.locationContainer, { backgroundColor: theme.card }]}>
         <TextInput
-          style={[styles.locationInput, { color: theme.text }]}
+          style={[styles.locationInput, { 
+            color: theme.text,
+            fontFamily: 'Roboto'
+          }]}
           placeholder="Location"
           placeholderTextColor={theme.text}
           value={location}
@@ -267,7 +276,7 @@ export default function CreateEventScreen(): React.ReactElement {
         {isLocationLoading ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#0000ff" />
-            <Text style={styles.loadingText}>Getting your location...  </Text>
+            <Text style={[styles.loadingText, { fontFamily: 'Roboto' }]}>Getting your location...</Text>
           </View>
         ) : mapRegion ? (
           <MapView
@@ -286,11 +295,12 @@ export default function CreateEventScreen(): React.ReactElement {
           </MapView>
         ) : (
           <View style={styles.placeholderMap}>
-            <Text>Unable to load map </Text>
+            <Text style={{ fontFamily: 'Roboto' }}>Unable to load map</Text>
           </View>
         )}
-        <Text style={styles.mapInstructions}>
-          Tap on the map to set location or drag the marker  </Text>
+        <Text style={[styles.mapInstructions, { fontFamily: 'Roboto' }]}>
+          Tap on the map to set location or drag the marker
+        </Text>
       </View>
 
       <CustomButton
