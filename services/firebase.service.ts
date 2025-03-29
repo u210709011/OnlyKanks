@@ -17,6 +17,8 @@ export const collections = {
   MESSAGES: 'messages',
   CHATS: 'chats',
   LOCATIONS: 'locations',
+  FRIEND_REQUESTS: 'friendRequests',
+  FRIENDS: 'friends',
 } as const;
 
 export class FirebaseService {

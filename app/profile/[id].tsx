@@ -11,6 +11,7 @@ import { EventCard } from '../../components/events/EventCard';
 import { auth } from '../../config/firebase';
 import { MessagesService } from '../../services/messages.service';
 import { CustomButton } from '../../components/shared/CustomButton';
+import { FriendsService, FriendRequestStatus } from '../../services/friends.service';
 
 export default function ProfileScreen() {
   const { id } = useLocalSearchParams();
@@ -20,6 +21,9 @@ export default function ProfileScreen() {
   const [userEvents, setUserEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [friendshipStatus, setFriendshipStatus] = useState<'none' | 'sent' | 'received' | 'friends'>('none');
+  const [friendRequestId, setFriendRequestId] = useState<string | undefined>(undefined);
+  const [friendActionLoading, setFriendActionLoading] = useState(false);
 
   useEffect(() => {
     const fetchUserAndEvents = async () => {
@@ -38,6 +42,13 @@ export default function ProfileScreen() {
             ...doc.data()
           })) as Event[];
           setUserEvents(events);
+          
+          // Fetch friendship status
+          if (auth.currentUser && auth.currentUser.uid !== id) {
+            const status = await FriendsService.getFriendRequestStatus(id as string);
+            setFriendshipStatus(status.status);
+            setFriendRequestId(status.requestId);
+          }
         } else {
           setError('User not found');
         }
@@ -62,6 +73,79 @@ export default function ProfileScreen() {
     } catch (error) {
       console.error('Error creating chat:', error);
       setError('Failed to start chat');
+    }
+  };
+  
+  const handleSendFriendRequest = async () => {
+    if (!auth.currentUser || auth.currentUser.uid === id) return;
+    
+    setFriendActionLoading(true);
+    try {
+      await FriendsService.sendFriendRequest(id as string);
+      setFriendshipStatus('sent');
+    } catch (error) {
+      console.error('Error sending friend request:', error);
+    } finally {
+      setFriendActionLoading(false);
+    }
+  };
+  
+  const handleCancelFriendRequest = async () => {
+    if (!friendRequestId) return;
+    
+    setFriendActionLoading(true);
+    try {
+      await FriendsService.cancelFriendRequest(friendRequestId);
+      setFriendshipStatus('none');
+      setFriendRequestId(undefined);
+    } catch (error) {
+      console.error('Error canceling friend request:', error);
+    } finally {
+      setFriendActionLoading(false);
+    }
+  };
+  
+  const handleAcceptFriendRequest = async () => {
+    if (!friendRequestId) return;
+    
+    setFriendActionLoading(true);
+    try {
+      await FriendsService.respondToFriendRequest(friendRequestId, FriendRequestStatus.ACCEPTED);
+      setFriendshipStatus('friends');
+      setFriendRequestId(undefined);
+    } catch (error) {
+      console.error('Error accepting friend request:', error);
+    } finally {
+      setFriendActionLoading(false);
+    }
+  };
+  
+  const handleRejectFriendRequest = async () => {
+    if (!friendRequestId) return;
+    
+    setFriendActionLoading(true);
+    try {
+      await FriendsService.respondToFriendRequest(friendRequestId, FriendRequestStatus.REJECTED);
+      setFriendshipStatus('none');
+      setFriendRequestId(undefined);
+    } catch (error) {
+      console.error('Error rejecting friend request:', error);
+    } finally {
+      setFriendActionLoading(false);
+    }
+  };
+  
+  const handleRemoveFriend = async () => {
+    if (!id) return;
+    
+    setFriendActionLoading(true);
+    try {
+      await FriendsService.removeFriend(id as string);
+      setFriendshipStatus('none');
+    } catch (error) {
+      console.error('Error removing friend:', error);
+    } finally {
+      setFriendActionLoading(false);
     }
   };
 
@@ -106,13 +190,64 @@ export default function ProfileScreen() {
           {user.bio || 'No bio available'}
         </Text>
         
-        {/* Add message button if not viewing own profile */}
+        {/* Only show action buttons if not viewing own profile */}
         {auth.currentUser?.uid !== id && (
-          <CustomButton
-            title="Send Message"
-            onPress={handleMessage}
-            style={styles.messageButton}
-          />
+          <View style={styles.actionButtons}>
+            {/* Friend Request Buttons based on status */}
+            {friendshipStatus === 'none' && (
+              <CustomButton
+                title="Add Friend"
+                onPress={handleSendFriendRequest}
+                loading={friendActionLoading}
+                style={styles.actionButton}
+              />
+            )}
+            
+            {friendshipStatus === 'sent' && (
+              <CustomButton
+                title="Cancel Request"
+                onPress={handleCancelFriendRequest}
+                loading={friendActionLoading}
+                style={styles.actionButton}
+                secondary
+              />
+            )}
+            
+            {friendshipStatus === 'received' && (
+              <View style={styles.requestButtons}>
+                <CustomButton
+                  title="Accept"
+                  onPress={handleAcceptFriendRequest}
+                  loading={friendActionLoading}
+                  style={[styles.actionButton, styles.requestButton]}
+                />
+                <CustomButton
+                  title="Reject"
+                  onPress={handleRejectFriendRequest}
+                  loading={friendActionLoading}
+                  style={[styles.actionButton, styles.requestButton]}
+                  secondary
+                />
+              </View>
+            )}
+            
+            {friendshipStatus === 'friends' && (
+              <CustomButton
+                title="Remove Friend"
+                onPress={handleRemoveFriend}
+                loading={friendActionLoading}
+                style={styles.actionButton}
+                secondary
+              />
+            )}
+            
+            {/* Message button */}
+            <CustomButton
+              title="Send Message"
+              onPress={handleMessage}
+              style={styles.actionButton}
+            />
+          </View>
         )}
       </View>
 
@@ -182,9 +317,25 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     margin: 16,
   },
+  actionButtons: {
+    marginTop: 16,
+    width: '100%',
+    paddingHorizontal: 32,
+  },
+  actionButton: {
+    marginTop: 8,
+  },
   messageButton: {
     marginTop: 16,
     width: 200,
     alignSelf: 'center',
+  },
+  requestButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  requestButton: {
+    flex: 1,
+    marginHorizontal: 4,
   },
 }); 

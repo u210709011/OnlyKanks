@@ -16,9 +16,13 @@ service cloud.firestore {
     match /messages/{messageId} {
       allow read: if request.auth != null && 
         (resource.data.senderId == request.auth.uid || 
-         resource.data.receiverId == request.auth.uid);
+         resource.data.receiverId == request.auth.uid ||
+         exists(/databases/$(database)/documents/chats/$(resource.data.chatId)) &&
+         get(/databases/$(database)/documents/chats/$(resource.data.chatId)).data.participants.hasAny([request.auth.uid]));
+      
       allow create: if request.auth != null && 
         request.resource.data.senderId == request.auth.uid;
+      
       allow update: if request.auth != null && 
         resource.data.receiverId == request.auth.uid &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
@@ -28,6 +32,42 @@ service cloud.firestore {
       allow read, create: if request.auth != null;
       allow update: if request.auth != null && 
         resource.data.participants.hasAny([request.auth.uid]);
+    }
+    
+    match /friendRequests/{requestId} {
+      // Anyone can read friend requests they sent or received
+      allow read: if request.auth != null &&
+        (resource.data.senderId == request.auth.uid || 
+         resource.data.receiverId == request.auth.uid);
+      
+      // Anyone can create a friend request where they are the sender
+      allow create: if request.auth != null && 
+        request.resource.data.senderId == request.auth.uid;
+      
+      // Only the receiver can update the status (accept/reject)
+      allow update: if request.auth != null && 
+        resource.data.receiverId == request.auth.uid;
+      
+      // Only the sender can delete a request (cancel)
+      allow delete: if request.auth != null && 
+        resource.data.senderId == request.auth.uid;
+    }
+    
+    match /friends/{friendId} {
+      // Only the users in the friendship can read it
+      allow read: if request.auth != null &&
+        (resource.data.userId == request.auth.uid || 
+         resource.data.friendId == request.auth.uid);
+      
+      // Anyone can create a friend relationship involving themselves
+      allow create: if request.auth != null && 
+        (request.resource.data.userId == request.auth.uid || 
+         request.resource.data.friendId == request.auth.uid);
+      
+      // Only the users in the friendship can delete it (unfriend)
+      allow delete: if request.auth != null &&
+        (resource.data.userId == request.auth.uid || 
+         resource.data.friendId == request.auth.uid);
     }
   }
 } 
