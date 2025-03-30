@@ -186,9 +186,63 @@ export default function ProfileScreen() {
           {user.displayName}
         </Text>
         
-        <Text style={[styles.bio, { color: theme.text }]}>
-          {user.bio || 'No bio available'}
-        </Text>
+        {/* Add Edit Profile button when viewing your own profile */}
+        {auth.currentUser?.uid === id && (
+          <CustomButton
+            title="Edit Profile"
+            onPress={() => router.push('/profile/edit')}
+            style={styles.editButton}
+            secondary
+          />
+        )}
+        
+        <View style={styles.profileDetails}>
+          {/* Bio Section */}
+          <View style={styles.profileSection}>
+            <View style={styles.sectionHeader}>
+              <Ionicons name="information-circle-outline" size={18} color={theme.text} />
+              <Text style={[styles.sectionTitle, { color: theme.text }]}>Bio</Text>
+            </View>
+            <Text style={[styles.sectionContent, { color: theme.text }]}>
+              {user.bio || 'No bio available'}
+            </Text>
+          </View>
+          
+          {/* Location Section */}
+          {(user.location?.city || user.location?.province) && (
+            <View style={styles.profileSection}>
+              <View style={styles.sectionHeader}>
+                <Ionicons name="location-outline" size={18} color={theme.text} />
+                <Text style={[styles.sectionTitle, { color: theme.text }]}>Location</Text>
+              </View>
+              <Text style={[styles.sectionContent, { color: theme.text }]}>
+                {[user.location.city, user.location.province].filter(Boolean).join(', ')}
+              </Text>
+            </View>
+          )}
+          
+          {/* Interests Section */}
+          {user.interests && user.interests.length > 0 && (
+            <View style={styles.profileSection}>
+              <View style={styles.sectionHeader}>
+                <Ionicons name="heart-outline" size={18} color={theme.text} />
+                <Text style={[styles.sectionTitle, { color: theme.text }]}>Interests</Text>
+              </View>
+              <View style={styles.interestsContainer}>
+                {user.interests.map((interest, index) => (
+                  <View 
+                    key={index} 
+                    style={[styles.interestTag, { backgroundColor: theme.primary + '20' }]}
+                  >
+                    <Text style={[styles.interestText, { color: theme.primary }]}>
+                      {interest}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
+        </View>
         
         {/* Only show action buttons if not viewing own profile */}
         {auth.currentUser?.uid !== id && (
@@ -275,60 +329,90 @@ const styles = StyleSheet.create({
   profileHeader: {
     alignItems: 'center',
     padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
   },
   profileImage: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    marginBottom: 16,
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    marginBottom: 10,
   },
   profileImagePlaceholder: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    marginBottom: 16,
+    width: 100,
+    height: 100,
+    borderRadius: 50,
     justifyContent: 'center',
     alignItems: 'center',
+    marginBottom: 10,
   },
   displayName: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: 'bold',
-    marginBottom: 8,
+    marginBottom: 10,
+    fontFamily: 'Roboto',
   },
-  bio: {
-    fontSize: 16,
-    textAlign: 'center',
-    paddingHorizontal: 32,
-    opacity: 0.8,
+  profileDetails: {
+    width: '100%',
+    marginTop: 10,
+    marginBottom: 15,
+  },
+  profileSection: {
+    marginBottom: 16,
+    width: '100%',
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
   },
   sectionTitle: {
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: 'bold',
-    marginVertical: 16,
-    paddingHorizontal: 16,
+    marginLeft: 8,
+    fontFamily: 'Roboto',
   },
-  noEvents: {
-    textAlign: 'center',
-    padding: 20,
-    opacity: 0.7,
+  sectionContent: {
+    fontSize: 14,
+    lineHeight: 20,
+    paddingLeft: 26,
+    fontFamily: 'Roboto',
+  },
+  interestsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingLeft: 26,
+  },
+  interestTag: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    marginRight: 8,
+    marginBottom: 8,
+  },
+  interestText: {
+    fontSize: 12,
+    fontFamily: 'Roboto',
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: 10,
+    flexWrap: 'wrap',
+  },
+  actionButton: {
+    marginTop: 8,
+    minWidth: 120,
+  },
+  editButton: {
+    marginTop: 8,
+    marginBottom: 16,
+    width: 140,
   },
   errorText: {
     fontSize: 16,
     textAlign: 'center',
     margin: 16,
-  },
-  actionButtons: {
-    marginTop: 16,
-    width: '100%',
-    paddingHorizontal: 32,
-  },
-  actionButton: {
-    marginTop: 8,
-  },
-  messageButton: {
-    marginTop: 16,
-    width: 200,
-    alignSelf: 'center',
   },
   requestButtons: {
     flexDirection: 'row',
@@ -337,5 +421,10 @@ const styles = StyleSheet.create({
   requestButton: {
     flex: 1,
     marginHorizontal: 4,
+  },
+  noEvents: {
+    textAlign: 'center',
+    padding: 20,
+    opacity: 0.7,
   },
 }); 

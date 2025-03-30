@@ -10,6 +10,11 @@ export interface User {
   email: string;
   photoURL?: string;
   bio?: string;
+  location?: {
+    city?: string;
+    province?: string;
+  };
+  interests?: string[];
   createdAt: Timestamp;
   updatedAt: Timestamp;
   lastSeen?: Timestamp;
