@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { View, StyleSheet, ActivityIndicator, RefreshControl, Text, SectionList } from 'react-native';
+import { View, StyleSheet, ActivityIndicator, RefreshControl, Text, SectionList, TouchableOpacity } from 'react-native';
 import { EventCard } from '../../components/events/EventCard';
 import { Event, EventsService, EventFilterOptions } from '../../services/events.service';
 import { useTheme } from '../../context/theme.context';
@@ -8,6 +8,8 @@ import { LocationService } from '../../services/location.service';
 import { Ionicons } from '@expo/vector-icons';
 import { format, isToday, isTomorrow, addDays, isYesterday } from 'date-fns';
 import { router } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BlurView } from 'expo-blur';
 
 interface EventGroup {
   date: Date;
@@ -15,7 +17,8 @@ interface EventGroup {
 }
 
 export default function ExploreScreen() {
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
+  const insets = useSafeAreaInsets();
   const [events, setEvents] = useState<Event[]>([]);
   const [groupedEvents, setGroupedEvents] = useState<EventGroup[]>([]);
   const [loading, setLoading] = useState(true);
@@ -176,21 +179,37 @@ export default function ExploreScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
+      {/* Header with messages button */}
+      <View style={[styles.header, { 
+        backgroundColor: theme.background,
+        paddingTop: insets.top,
+        borderBottomColor: theme.border 
+      }]}>
+        <Text style={[styles.headerTitle, { color: theme.text }]}>
+          Discover
+        </Text>
+        <TouchableOpacity 
+          style={styles.messagesButton}
+          onPress={() => router.push('/messages')}
+        >
+          <Ionicons name="chatbubbles-outline" size={24} color={theme.text} />
+        </TouchableOpacity>
+      </View>
+      
       <EventFilters 
         onFilterChange={handleFilterChange} 
         isLoading={filterLoading}
         events={events}
-        onEventPress={(eventId) => router.push(`/event/${eventId}`)}
       />
       
-      {groupedEvents.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Ionicons name="calendar-outline" size={64} color={theme.text} style={styles.emptyIcon} />
-          <Text style={[styles.emptyText, { color: theme.text, fontFamily: 'Roboto' }]}>
-            No events found
-          </Text>
-          <Text style={[styles.emptySubtext, { color: theme.text, fontFamily: 'Roboto' }]}>
-            Try adjusting your filters or create a new event
+      {events.length === 0 && !loading ? (
+        <View style={[styles.emptyContainer, { marginTop: 80 }]}>
+          <Ionicons name="calendar-outline" size={64} color={theme.text + '30'} style={{ marginBottom: 16 }} />
+          <Text style={[styles.emptyText, { color: theme.text }]}>No events found</Text>
+          <Text style={[styles.emptySubtext, { color: theme.text + '80' }]}>
+            {filters.searchQuery ? 
+              "Try different search terms or filters" : 
+              "Try changing your location or filters"}
           </Text>
         </View>
       ) : (
@@ -204,7 +223,7 @@ export default function ExploreScreen() {
           renderSectionHeader={({ section: { title } }) => (
             title ? (
               <View style={[styles.sectionHeader, { backgroundColor: theme.background }]}>
-                <Text style={[styles.sectionHeaderText, { color: theme.text, fontFamily: 'Roboto' }]}>{title}</Text>
+                <Text style={[styles.sectionHeaderText, { color: theme.text + '80' }]}>{title}</Text>
               </View>
             ) : null
           )}
@@ -216,6 +235,9 @@ export default function ExploreScreen() {
               tintColor={theme.text}
             />
           }
+          contentContainerStyle={{ 
+            paddingBottom: insets.bottom + 76 // 60 (tab bar) + 16 (spacing)
+          }}
         />
       )}
     </View>
@@ -225,6 +247,26 @@ export default function ExploreScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+  },
+  headerTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    fontFamily: 'Roboto',
+  },
+  messagesButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   centered: {
     justifyContent: 'center',
@@ -236,32 +278,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 16,
   },
-  emptyIcon: {
-    marginBottom: 16,
-    opacity: 0.7,
-  },
   emptyText: {
     fontSize: 18,
     fontWeight: 'bold',
     marginBottom: 8,
-    textAlign: 'center',
     fontFamily: 'Roboto',
   },
   emptySubtext: {
     fontSize: 14,
-    opacity: 0.7,
     textAlign: 'center',
+    maxWidth: '80%',
     fontFamily: 'Roboto',
   },
   sectionHeader: {
-    padding: 12,
+    padding: 16,
     paddingLeft: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0,0,0,0.1)',
   },
   sectionHeaderText: {
-    fontSize: 16,
-    fontWeight: 'bold',
+    fontSize: 14,
+    fontWeight: '500',
     fontFamily: 'Roboto',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
   },
 });

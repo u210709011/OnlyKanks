@@ -9,6 +9,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { User } from '../../services/user.service';
 import { CustomButton } from '../../components/shared/CustomButton';
 import React from 'react';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+export const unstable_settings = {
+  href: null,
+};
 
 type FriendItemProps = {
   friend: Friend;
@@ -158,6 +163,7 @@ const RequestItem = ({ request, onAccept, onReject, onPress }: RequestItemProps)
 export default function FriendsScreen() {
   const router = useRouter();
   const { theme } = useTheme();
+  const insets = useSafeAreaInsets();
   const [friends, setFriends] = useState<Friend[]>([]);
   const [requests, setRequests] = useState<FriendRequest[]>([]);
   const [loading, setLoading] = useState(true);
@@ -237,7 +243,9 @@ export default function FriendsScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <View style={styles.tabBar}>
+      <View style={{ height: insets.top }} />
+      
+      <View style={[styles.tabBar, { borderBottomColor: theme.border, borderBottomWidth: 0.5 }]}>
         <Pressable 
           style={[
             styles.tab, 
@@ -247,9 +255,12 @@ export default function FriendsScreen() {
         >
           <Text style={[
             styles.tabText, 
-            { color: activeTab === 'friends' ? theme.primary : theme.text }
+            { 
+              color: activeTab === 'friends' ? theme.primary : theme.text + '80',
+              fontFamily: 'Roboto'
+            }
           ]}>
-            Friends
+            Friends {friends.length > 0 && `(${friends.length})`}
           </Text>
         </Pressable>
         
@@ -262,7 +273,10 @@ export default function FriendsScreen() {
         >
           <Text style={[
             styles.tabText, 
-            { color: activeTab === 'requests' ? theme.primary : theme.text }
+            { 
+              color: activeTab === 'requests' ? theme.primary : theme.text + '80',
+              fontFamily: 'Roboto'
+            }
           ]}>
             Requests {requests.length > 0 && `(${requests.length})`}
           </Text>
@@ -271,7 +285,7 @@ export default function FriendsScreen() {
       
       {loading ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={theme.text} />
+          <ActivityIndicator size="large" color={theme.primary} />
         </View>
       ) : (
         <>
@@ -288,11 +302,15 @@ export default function FriendsScreen() {
                       onRemove={() => handleRemoveFriend(item.friendId)}
                     />
                   )}
-                  contentContainerStyle={styles.listContent}
+                  contentContainerStyle={[
+                    styles.listContent, 
+                    { paddingBottom: insets.bottom + 16 }
+                  ]}
                 />
               ) : (
                 <View style={styles.emptyContainer}>
-                  <Text style={[styles.emptyText, { color: theme.text }]}>
+                  <Ionicons name="people-outline" size={64} color={theme.text + '60'} style={{ marginBottom: 16 }} />
+                  <Text style={[styles.emptyText, { color: theme.text, fontFamily: 'Roboto' }]}>
                     You don't have any friends yet
                   </Text>
                 </View>
@@ -314,11 +332,15 @@ export default function FriendsScreen() {
                       onPress={() => router.push(`/profile/${item.senderId}`)}
                     />
                   )}
-                  contentContainerStyle={styles.listContent}
+                  contentContainerStyle={[
+                    styles.listContent, 
+                    { paddingBottom: insets.bottom + 16 }
+                  ]}
                 />
               ) : (
                 <View style={styles.emptyContainer}>
-                  <Text style={[styles.emptyText, { color: theme.text }]}>
+                  <Ionicons name="person-add-outline" size={64} color={theme.text + '60'} style={{ marginBottom: 16 }} />
+                  <Text style={[styles.emptyText, { color: theme.text, fontFamily: 'Roboto' }]}>
                     No pending friend requests
                   </Text>
                 </View>

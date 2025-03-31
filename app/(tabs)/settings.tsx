@@ -1,269 +1,266 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, Image, Pressable, ScrollView, Alert } from 'react-native';
+import React from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, StatusBar } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../context/auth.context';
 import { useTheme } from '../../context/theme.context';
-import { CustomButton } from '../../components/shared/CustomButton';
 import { auth } from '../../config/firebase';
-import { User, UserService } from '../../services/user.service';
-import * as ImagePicker from 'expo-image-picker';
-import { CloudinaryService } from '../../services/cloudinary.service';
 import { Ionicons } from '@expo/vector-icons';
 import { signOut } from '../../services/auth.service';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+export const unstable_settings = {
+  href: null,
+};
+
+type SettingItem = {
+  icon: string;
+  title: string;
+  subtitle?: string;
+  onPress: () => void;
+  right?: string;
+  color?: string;
+};
 
 const SettingsScreen = () => {
   const router = useRouter();
   const { user } = useAuth();
-  const { theme } = useTheme();
-  const [userProfile, setUserProfile] = useState<User | null>(null);
-  const [displayName, setDisplayName] = useState('');
-  const [bio, setBio] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [imageUrl, setImageUrl] = useState<string>('');
-  const [isEditing, setIsEditing] = useState(false);
-
-  useEffect(() => {
-    fetchUserProfile();
-  }, []);
-
-  const fetchUserProfile = async () => {
-    if (!auth.currentUser) return;
-    
-    try {
-      const userData = await UserService.getUser(auth.currentUser.uid);
-      if (userData) {
-        setUserProfile(userData);
-        setDisplayName(userData.displayName);
-        setBio(userData.bio || '');
-        setImageUrl(userData.photoURL || '');
-      }
-    } catch (error) {
-      console.error('Error fetching user profile:', error);
-    }
-  };
+  const { theme, toggleTheme, isDark } = useTheme();
+  const insets = useSafeAreaInsets();
 
   const handleSignOut = async () => {
     try {
-      setLoading(true);
-      await signOut();
-      router.replace('/sign-in');
+      Alert.alert(
+        "Sign Out",
+        "Are you sure you want to sign out?",
+        [
+          { text: "Cancel", style: "cancel" },
+          { 
+            text: "Sign Out", 
+            style: "destructive",
+            onPress: async () => {
+              await signOut();
+              router.replace('/sign-in');
+            }
+          }
+        ]
+      );
     } catch (error) {
       console.error('Error signing out:', error);
       Alert.alert('Error', 'Failed to sign out');
-    } finally {
-      setLoading(false);
     }
   };
 
-  const pickImage = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
-    });
-
-    if (!result.canceled && result.assets[0].uri) {
-      try {
-        const url = await CloudinaryService.uploadImage(result.assets[0].uri);
-        setImageUrl(url);
-      } catch (error) {
-        Alert.alert('Error', 'Failed to upload image');
-      }
+  const accountSettings: SettingItem[] = [
+    {
+      icon: 'person-circle-outline',
+      title: 'Profile Settings',
+      subtitle: 'Edit your profile information',
+      onPress: () => router.push('/profile/edit'),
+    },
+    {
+      icon: 'people-outline',
+      title: 'Friends',
+      subtitle: 'Manage your friends and requests',
+      onPress: () => router.push('/friends'),
     }
-  };
+  ];
 
-  const handleSave = async () => {
-    if (!auth.currentUser) return;
-    
-    setLoading(true);
-    try {
-      await UserService.updateUser(auth.currentUser.uid, {
-        displayName,
-        bio,
-        photoURL: imageUrl,
-      });
-      setIsEditing(false);
-      await fetchUserProfile();
-      Alert.alert('Success', 'Profile updated successfully');
-    } catch (error) {
-      Alert.alert('Error', 'Failed to update profile');
-    } finally {
-      setLoading(false);
+  const appSettings: SettingItem[] = [
+    {
+      icon: isDark ? 'sunny-outline' : 'moon-outline',
+      title: 'Theme',
+      subtitle: isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode',
+      onPress: toggleTheme,
+      right: isDark ? 'Dark' : 'Light',
+    },
+    {
+      icon: 'notifications-outline',
+      title: 'Notifications',
+      subtitle: 'Manage your notification preferences',
+      onPress: () => router.push('/settings/notifications'),
+    },
+    {
+      icon: 'lock-closed-outline',
+      title: 'Privacy',
+      subtitle: 'Manage your privacy settings',
+      onPress: () => router.push('/settings/privacy'),
     }
-  };
+  ];
+
+  const supportSettings: SettingItem[] = [
+    {
+      icon: 'help-circle-outline',
+      title: 'Help & Support',
+      subtitle: 'Get help or contact support',
+      onPress: () => router.push('/settings/help'),
+    },
+    {
+      icon: 'information-circle-outline',
+      title: 'About',
+      subtitle: 'App version and information',
+      onPress: () => router.push('/settings/about'),
+    },
+    {
+      icon: 'log-out-outline',
+      title: 'Sign Out',
+      onPress: handleSignOut,
+      color: '#FF3B30',
+    }
+  ];
+
+  const renderSettingItem = (item: SettingItem, index: number, isLast: boolean) => (
+    <TouchableOpacity
+      key={index}
+      style={[
+        styles.settingItem,
+        !isLast && styles.settingItemBorder,
+        { borderBottomColor: theme.border }
+      ]}
+      onPress={item.onPress}
+    >
+      <View style={[styles.settingIconContainer, { backgroundColor: theme.background + '30' }]}>
+        <Ionicons 
+          name={item.icon as any} 
+          size={20} 
+          color={item.color || theme.primary} 
+        />
+      </View>
+      
+      <View style={styles.settingContent}>
+        <Text style={[styles.settingTitle, { color: item.color || theme.text }]}>
+          {item.title}
+        </Text>
+        {item.subtitle && (
+          <Text style={[styles.settingSubtitle, { color: theme.text + '80' }]}>
+            {item.subtitle}
+          </Text>
+        )}
+      </View>
+      
+      <View style={styles.settingRight}>
+        {item.right && (
+          <Text style={[styles.settingRightText, { color: theme.text + '80' }]}>
+            {item.right}
+          </Text>
+        )}
+        <Ionicons name="chevron-forward" size={18} color={theme.text + '60'} />
+      </View>
+    </TouchableOpacity>
+  );
+
+  const renderSection = (title: string, items: SettingItem[]) => (
+    <View style={styles.sectionContainer}>
+      <Text style={[styles.sectionTitle, { color: theme.primary }]}>{title}</Text>
+      <View style={[styles.section, { backgroundColor: theme.card }]}>
+        {items.map((item, index) => renderSettingItem(item, index, index === items.length - 1))}
+      </View>
+    </View>
+  );
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: theme.background }]}>
-      <View style={styles.profileSection}>
-        <Pressable 
-          onPress={() => {
-            if (auth.currentUser) {
-              router.push(`/profile/${auth.currentUser.uid}`);
-            }
-          }}
-          style={styles.viewProfileButton}
-        >
-          <Text style={[styles.viewProfileText, { color: theme.text }]}>
-            View Public Profile
-          </Text>
-          <Ionicons name="arrow-forward" size={20} color={theme.text} />
-        </Pressable>
-
-        <Pressable onPress={pickImage} disabled={!isEditing}>
-          {imageUrl ? (
-            <Image source={{ uri: imageUrl }} style={styles.profileImage} />
-          ) : (
-            <View style={[styles.profileImagePlaceholder, { backgroundColor: theme.border }]}>
-              <Ionicons name="person" size={40} color={theme.text} />
-            </View>
-          )}
-        </Pressable>
-
-        {isEditing ? (
-          <>
-            <TextInput
-              style={[styles.input, { backgroundColor: theme.card, color: theme.text }]}
-              value={displayName}
-              onChangeText={setDisplayName}
-              placeholder="Display Name"
-              placeholderTextColor={theme.text}
-            />
-            <TextInput
-              style={[styles.input, styles.bioInput, { backgroundColor: theme.card, color: theme.text }]}
-              value={bio}
-              onChangeText={setBio}
-              placeholder="Bio"
-              placeholderTextColor={theme.text}
-              multiline
-              numberOfLines={4}
-            />
-          </>
-        ) : (
-          <>
-            <Text style={[styles.displayName, { color: theme.text }]}>{userProfile?.displayName}</Text>
-            <Text style={[styles.bio, { color: theme.text }]}>{userProfile?.bio || 'No bio yet'}</Text>
-          </>
-        )}
-
-        <CustomButton
-          title={isEditing ? 'Save Profile' : 'Edit Profile'}
-          onPress={isEditing ? handleSave : () => setIsEditing(true)}
-          loading={loading}
-        />
-      </View>
-
-      <View style={styles.settingsSection}>
-        <CustomButton
-          title="Sign Out"
-          onPress={handleSignOut}
-          secondary
-        />
-      </View>
-
-      <View style={styles.section}>
-        <Text style={[styles.sectionTitle, { color: theme.text }]}>Advanced</Text>
-        <CustomButton
-          title="Restart App & Clear Cache"
-          onPress={() => {
-            Alert.alert(
-              'Restart App',
-              'This will restart the app and clear the cache. Use this if you\'re experiencing technical issues.',
-              [
-                { text: 'Cancel', style: 'cancel' },
-                { 
-                  text: 'Restart', 
-                  style: 'destructive',
-                  onPress: async () => {
-                    try {
-                      await signOut();
-                      router.replace('/sign-in');
-                    } catch (err) {
-                      console.error('Error signing out:', err);
-                    }
-                  }
-                }
-              ]
-            );
-          }}
-          secondary
-        />
-      </View>
-    </ScrollView>
+    <View style={{ flex: 1, backgroundColor: theme.background }}>
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
+      <View style={{ height: insets.top, backgroundColor: theme.background }} />
+      
+      <ScrollView 
+        style={styles.container}
+        contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}
+        showsVerticalScrollIndicator={false}
+      >
+        {renderSection('ACCOUNT', accountSettings)}
+        {renderSection('APP SETTINGS', appSettings)}
+        {renderSection('SUPPORT', supportSettings)}
+        
+        <Text style={[styles.versionText, { color: theme.text + '60' }]}>
+          Version 1.0.0
+        </Text>
+      </ScrollView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 16,
   },
-  profileSection: {
-    alignItems: 'center',
-    marginBottom: 32,
+  header: {
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.05)',
   },
-  profileImage: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    marginBottom: 16,
-  },
-  profileImagePlaceholder: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    marginBottom: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  displayName: {
-    fontSize: 24,
+  headerTitle: {
+    fontSize: 22,
     fontWeight: 'bold',
-    marginBottom: 8,
+    fontFamily: 'Roboto',
   },
-  bio: {
-    fontSize: 16,
-    textAlign: 'center',
-    marginBottom: 16,
-    paddingHorizontal: 32,
-  },
-  input: {
-    width: '100%',
-    height: 40,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    marginBottom: 12,
-    borderWidth: 1,
-  },
-  bioInput: {
-    height: 100,
-    textAlignVertical: 'top',
-    paddingTop: 12,
-  },
-  settingsSection: {
-    marginTop: 16,
-  },
-  viewProfileButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 12,
-    marginBottom: 16,
-  },
-  viewProfileText: {
-    fontSize: 16,
-    marginRight: 8,
-    textDecorationLine: 'underline',
+  sectionContainer: {
+    marginBottom: 24,
   },
   section: {
-    marginTop: 16,
-    padding: 16,
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginHorizontal: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
   },
   sectionTitle: {
-    fontSize: 20,
+    fontSize: 13,
     fontWeight: 'bold',
-    marginBottom: 16,
+    textTransform: 'uppercase',
+    paddingHorizontal: 20,
+    paddingBottom: 8,
+    paddingTop: 12,
+    fontFamily: 'Roboto',
   },
+  settingItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+  },
+  settingItemBorder: {
+    borderBottomWidth: 0.5,
+  },
+  settingIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+  },
+  settingContent: {
+    flex: 1,
+  },
+  settingTitle: {
+    fontSize: 16,
+    fontWeight: '500',
+    fontFamily: 'Roboto',
+  },
+  settingSubtitle: {
+    fontSize: 13,
+    marginTop: 2,
+    fontFamily: 'Roboto',
+  },
+  settingRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  settingRightText: {
+    marginRight: 8,
+    fontSize: 14,
+    fontFamily: 'Roboto',
+  },
+  versionText: {
+    textAlign: 'center',
+    fontSize: 12,
+    marginVertical: 24,
+    fontFamily: 'Roboto',
+  }
 });
 
 export default SettingsScreen;

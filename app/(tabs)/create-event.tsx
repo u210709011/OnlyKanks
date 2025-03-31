@@ -12,6 +12,8 @@ import MapView, { Marker, Region } from 'react-native-maps';
 import { LocationService, UserLocation } from '../../services/location.service';
 import { CloudinaryService } from '../../services/cloudinary.service';
 import { useTheme } from '../../context/theme.context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 
 // Define the schema for validation
 const schema = yup.object().shape({
@@ -24,6 +26,7 @@ const schema = yup.object().shape({
 
 export default function CreateEventScreen(): React.ReactElement {
   const { theme, isDark } = useTheme();
+  const insets = useSafeAreaInsets();
   const [title, setTitle] = useState<string>('');
   const [date, setDate] = useState<Date>(new Date());
   const [showDatePicker, setShowDatePicker] = useState<boolean>(false);
@@ -178,135 +181,166 @@ export default function CreateEventScreen(): React.ReactElement {
   };
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: theme.background }]}>
-      <TextInput
-        style={[styles.input, { 
-          backgroundColor: theme.card,
-          color: theme.text,
-          borderColor: theme.border,
-          fontFamily: 'Roboto'
-        }]}
-        placeholder="Event Title"
-        placeholderTextColor={theme.text}
-        value={title}
-        onChangeText={setTitle}
-      />
-      
-      <Pressable 
-        style={[styles.input, { backgroundColor: theme.card }]}
-        onPress={() => setShowDatePicker(true)}
-      >
-        <Text style={{ color: theme.text, fontFamily: 'Roboto' }}>
-          {date ? format(date, 'PPP') : 'Select Date'}
+    <ScrollView 
+      style={[styles.container, { backgroundColor: theme.background }]}
+      contentContainerStyle={{ 
+        paddingTop: insets.top + 12, 
+        paddingBottom: insets.bottom + 76, // 60 (tab bar) + 16 (spacing)
+        paddingHorizontal: 16 
+      }}
+    >
+      <View style={[styles.header, { backgroundColor: theme.background }]}>
+        <Text style={[styles.headerTitle, { color: theme.text, fontFamily: 'Roboto' }]}>
+          Create Event
         </Text>
-      </Pressable>
-
-      {showDatePicker && (
-        <DateTimePicker
-          value={date}
-          mode="date"
-          display="default"
-          minimumDate={today}
-          themeVariant={isDark ? "dark" : "light"}
-          onChange={(event, selectedDate) => {
-            setShowDatePicker(false);
-            if (selectedDate) {
-              setDate(selectedDate);
-            }
-          }}
-        />
-      )}
-
-      <TextInput
-        style={[styles.input, styles.textArea, { 
-          backgroundColor: theme.card,
-          color: theme.text,
-          borderColor: theme.border,
-          fontFamily: 'Roboto'
-        }]}
-        placeholder="Description"
-        placeholderTextColor={theme.text}
-        value={description}
-        onChangeText={setDescription}
-        multiline
-        numberOfLines={4}
-      />
-
-      <Pressable style={styles.imageButton} onPress={pickImage}>
-        {imagePreview ? (
-          <View style={styles.imageContainer}>
-            <Image 
-              source={{ uri: imagePreview }} 
-              style={styles.imagePreview} 
-            />
-            <Pressable 
-              style={[styles.removeButton, { backgroundColor: theme.error }]}
-              onPress={() => {
-                setImage(null);
-                setImagePreview(null);
-              }}
-            >
-              <Text style={{ color: 'white', fontFamily: 'Roboto' }}>Remove Image</Text>
-            </Pressable>
-          </View>
-        ) : (
-          <Text style={{ color: theme.text, width: '100%', textAlign: 'center', fontFamily: 'Roboto' }}>Add Event Image</Text>
-        )}
-      </Pressable>
-
-      <View style={[styles.locationContainer, { backgroundColor: theme.card }]}>
-        <TextInput
-          style={[styles.locationInput, { 
-            color: theme.text,
-            fontFamily: 'Roboto'
-          }]}
-          placeholder="Location"
-          placeholderTextColor={theme.text}
-          value={location}
-          onChangeText={setLocation}
-        />
-        <CustomButton
-          title="Use Current Location"
-          onPress={handleRefreshLocation}
-          secondary
-        />
       </View>
 
-      <View style={styles.mapContainer}>
-        {isLocationLoading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#0000ff" />
-            <Text style={[styles.loadingText, { fontFamily: 'Roboto' }]}>Getting your location...</Text>
-          </View>
-        ) : mapRegion ? (
-          <MapView
-            style={styles.map}
-            initialRegion={mapRegion}
-            onPress={handleMapPress}
-          >
-            {markerCoordinates && (
-              <Marker
-                coordinate={markerCoordinates}
-                title={title || "Event location"}
-                draggable
-                onDragEnd={handleMarkerDrag}
-              />
-            )}
-          </MapView>
-        ) : (
-          <View style={styles.placeholderMap}>
-            <Text style={{ fontFamily: 'Roboto' }}>Unable to load map</Text>
-          </View>
+      <View style={[styles.formContainer, { backgroundColor: theme.card }]}>
+        <Text style={[styles.label, { color: theme.text + '80', fontFamily: 'Roboto' }]}>Event Title</Text>
+        <TextInput
+          style={[styles.input, { 
+            backgroundColor: theme.background,
+            color: theme.text,
+            borderColor: theme.border,
+            fontFamily: 'Roboto'
+          }]}
+          placeholder="Enter event title"
+          placeholderTextColor={theme.text + '40'}
+          value={title}
+          onChangeText={setTitle}
+        />
+        
+        <Text style={[styles.label, { color: theme.text + '80', fontFamily: 'Roboto' }]}>Date & Time</Text>
+        <Pressable 
+          style={[styles.input, { backgroundColor: theme.background }]}
+          onPress={() => setShowDatePicker(true)}
+        >
+          <Text style={{ color: theme.text, fontFamily: 'Roboto' }}>
+            {date ? format(date, 'PPP') : 'Select Date'}
+          </Text>
+        </Pressable>
+
+        {showDatePicker && (
+          <DateTimePicker
+            value={date}
+            mode="date"
+            display="default"
+            minimumDate={today}
+            themeVariant={isDark ? "dark" : "light"}
+            onChange={(event, selectedDate) => {
+              setShowDatePicker(false);
+              if (selectedDate) {
+                setDate(selectedDate);
+              }
+            }}
+          />
         )}
-        <Text style={[styles.mapInstructions, { fontFamily: 'Roboto' }]}>
-          Tap on the map to set location or drag the marker
-        </Text>
+
+        <Text style={[styles.label, { color: theme.text + '80', fontFamily: 'Roboto' }]}>Description</Text>
+        <TextInput
+          style={[styles.input, styles.textArea, { 
+            backgroundColor: theme.background,
+            color: theme.text,
+            borderColor: theme.border,
+            fontFamily: 'Roboto'
+          }]}
+          placeholder="Enter event description"
+          placeholderTextColor={theme.text + '40'}
+          value={description}
+          onChangeText={setDescription}
+          multiline
+          numberOfLines={4}
+        />
+
+        <Text style={[styles.label, { color: theme.text + '80', fontFamily: 'Roboto' }]}>Event Image</Text>
+        <Pressable 
+          style={[styles.imageButton, { backgroundColor: theme.background }]} 
+          onPress={pickImage}
+        >
+          {imagePreview ? (
+            <View style={styles.imageContainer}>
+              <Image 
+                source={{ uri: imagePreview }} 
+                style={styles.imagePreview} 
+              />
+              <Pressable 
+                style={[styles.removeButton, { backgroundColor: theme.error }]}
+                onPress={() => {
+                  setImage(null);
+                  setImagePreview(null);
+                }}
+              >
+                <Text style={{ color: 'white', fontFamily: 'Roboto' }}>Remove Image</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <View style={styles.imagePlaceholder}>
+              <Ionicons name="image-outline" size={32} color={theme.text + '40'} />
+              <Text style={{ color: theme.text + '40', fontFamily: 'Roboto', marginTop: 8 }}>Add Event Image</Text>
+            </View>
+          )}
+        </Pressable>
+
+        <Text style={[styles.label, { color: theme.text + '80', fontFamily: 'Roboto' }]}>Location</Text>
+        <View style={[styles.locationContainer, { backgroundColor: theme.background }]}>
+          <TextInput
+            style={[styles.locationInput, { 
+              color: theme.text,
+              fontFamily: 'Roboto'
+            }]}
+            placeholder="Enter location"
+            placeholderTextColor={theme.text + '40'}
+            value={location}
+            onChangeText={setLocation}
+          />
+          <CustomButton
+            title="Use Current Location"
+            onPress={handleRefreshLocation}
+            secondary
+          />
+        </View>
+
+        <View style={styles.mapContainer}>
+          {isLocationLoading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={theme.primary} />
+              <Text style={[styles.loadingText, { color: theme.text + '80', fontFamily: 'Roboto' }]}>Getting your location...</Text>
+            </View>
+          ) : mapRegion ? (
+            <MapView
+              style={styles.map}
+              initialRegion={mapRegion}
+              onPress={handleMapPress}
+            >
+              {markerCoordinates && (
+                <Marker
+                  coordinate={markerCoordinates}
+                  title={title || "Event location"}
+                  draggable
+                  onDragEnd={handleMarkerDrag}
+                />
+              )}
+            </MapView>
+          ) : (
+            <View style={styles.placeholderMap}>
+              <Text style={{ color: theme.text + '80', fontFamily: 'Roboto' }}>Unable to load map</Text>
+            </View>
+          )}
+          <Text style={[styles.mapInstructions, { 
+            backgroundColor: theme.card + '95',
+            color: theme.text,
+            fontFamily: 'Roboto'
+          }]}>
+            Tap on the map to set location or drag the marker
+          </Text>
+        </View>
       </View>
 
       <CustomButton
         title="Create Event"
         onPress={handleSubmit}
         loading={isLoading}
+        style={styles.submitButton}
       />
     </ScrollView>
   );
@@ -315,57 +349,86 @@ export default function CreateEventScreen(): React.ReactElement {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 16,
   },
-  input: {
-    height: 40,
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 10,
+  header: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     marginBottom: 16,
   },
-  textArea: {
-    height: 100,
-    textAlignVertical: 'top',
-    paddingTop: 10,
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    fontFamily: 'Roboto',
   },
-  locationContainer: {
+  formContainer: {
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 16,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '500',
     marginBottom: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
   },
-  locationInput: {
-    height: 40,
+  input: {
+    height: 48,
     borderWidth: 1,
     borderRadius: 8,
-    paddingHorizontal: 10,
-    marginBottom: 8,
+    paddingHorizontal: 16,
+    marginBottom: 24,
+    fontSize: 16,
+  },
+  textArea: {
+    height: 120,
+    textAlignVertical: 'top',
+    paddingTop: 16,
+  },
+  locationContainer: {
+    marginBottom: 24,
+  },
+  locationInput: {
+    height: 48,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    marginBottom: 12,
+    fontSize: 16,
   },
   imageButton: {
-    padding: 16,
+    height: 200,
     borderWidth: 1,
     borderRadius: 8,
     alignItems: 'center',
-    marginVertical: 8,
+    justifyContent: 'center',
+    marginBottom: 24,
+    overflow: 'hidden',
   },
   imageContainer: {
     width: '100%',
-    alignItems: 'center',
+    height: '100%',
   },
   imagePreview: {
     width: '100%',
-    height: 200,
-    borderRadius: 8,
+    height: '100%',
+  },
+  imagePlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   removeButton: {
-    marginTop: 8,
-    padding: 8,
-    borderRadius: 4,
+    position: 'absolute',
+    bottom: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
   },
   mapContainer: {
     height: 300,
-    marginBottom: 16,
+    marginBottom: 24,
     borderRadius: 8,
     overflow: 'hidden',
-    backgroundColor: '#e0e0e0',
   },
   map: {
     width: '100%',
@@ -382,16 +445,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   loadingText: {
-    marginTop: 10,
-    color: '#666',
+    marginTop: 12,
+    fontSize: 16,
   },
   mapInstructions: {
     position: 'absolute',
-    bottom: 10,
+    bottom: 16,
     alignSelf: 'center',
-    backgroundColor: 'rgba(255,255,255,0.8)',
-    padding: 5,
-    borderRadius: 4,
-    fontSize: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    fontSize: 14,
+  },
+  submitButton: {
+    marginTop: 8,
   },
 });

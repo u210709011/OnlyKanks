@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Pressable, Modal, ScrollView, TextInput, Switch, Dimensions, TouchableOpacity, Alert, Image } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Modal, ScrollView, TextInput, Switch, Dimensions, TouchableOpacity, Alert, Image, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Slider from '@react-native-community/slider';
 import { useTheme } from '../../context/theme.context';
@@ -7,7 +7,7 @@ import { LocationService } from '../../services/location.service';
 import { CustomButton } from '../shared/CustomButton';
 import MapView, { Marker, PROVIDER_GOOGLE, Callout } from 'react-native-maps';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { format, startOfDay } from 'date-fns';
+import { format, startOfDay, addDays, isToday, isAfter, isBefore } from 'date-fns';
 import { Event } from '../../services/events.service';
 import { BlurView } from 'expo-blur';
 
@@ -91,9 +91,21 @@ export const EventFilters: React.FC<EventFiltersProps> = ({
   // Add state for selected event
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
 
+  const filterAnimation = useRef(new Animated.Value(0)).current;
+
   useEffect(() => {
     getUserLocation();
-  }, []);
+    Animated.timing(filterAnimation, {
+      toValue: modalVisible ? 1 : 0,
+      duration: 300,
+      useNativeDriver: false,
+    }).start();
+  }, [modalVisible]);
+
+  const filterHeight = filterAnimation.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 280],
+  });
 
   // Get user location
   const getUserLocation = async () => {
@@ -220,16 +232,110 @@ export const EventFilters: React.FC<EventFiltersProps> = ({
     setSelectedEvent(null);
   };
 
+  const handleStartDateChange = (event: any, selectedDate?: Date) => {
+    setShowStartDatePicker(false);
+    if (selectedDate) {
+      handleDateRangeChange('startDate', selectedDate);
+      
+      // If end date is before start date, update it
+      if (filters.dateRange.endDate && isBefore(filters.dateRange.endDate, selectedDate)) {
+        handleDateRangeChange('endDate', selectedDate);
+      }
+    }
+  };
+
+  const handleEndDateChange = (event: any, selectedDate?: Date) => {
+    setShowEndDatePicker(false);
+    if (selectedDate) {
+      handleDateRangeChange('endDate', selectedDate);
+      
+      // If start date is after end date, update it
+      if (filters.dateRange.startDate && isAfter(filters.dateRange.startDate, selectedDate)) {
+        handleDateRangeChange('startDate', selectedDate);
+      }
+    }
+  };
+
+  const clearFilters = () => {
+    setFilters(prev => ({
+      ...prev,
+      searchQuery: '',
+      dateRange: {
+        startDate: null,
+        endDate: null,
+      },
+      distance: 50,
+    }));
+  };
+
+  const datePresets = [
+    { label: 'Today', value: 'today' },
+    { label: 'Tomorrow', value: 'tomorrow' },
+    { label: 'This week', value: 'this-week' },
+    { label: 'Weekend', value: 'weekend' },
+  ];
+
+  const handleDatePreset = (preset: string) => {
+    const today = new Date();
+    
+    switch (preset) {
+      case 'today':
+        handleDateRangeChange('startDate', today);
+        handleDateRangeChange('endDate', today);
+        break;
+      case 'tomorrow':
+        const tomorrow = addDays(today, 1);
+        handleDateRangeChange('startDate', tomorrow);
+        handleDateRangeChange('endDate', tomorrow);
+        break;
+      case 'this-week':
+        handleDateRangeChange('startDate', today);
+        handleDateRangeChange('endDate', addDays(today, 7));
+        break;
+      case 'weekend':
+        // Find the next weekend (Sat-Sun)
+        const dayOfWeek = today.getDay(); // 0 = Sun, 6 = Sat
+        let daysUntilWeekend = dayOfWeek === 0 ? 6 : 6 - dayOfWeek;
+        if (dayOfWeek === 6) daysUntilWeekend = 0; // If today is Saturday
+        
+        const saturday = addDays(today, daysUntilWeekend);
+        const sunday = addDays(saturday, 1);
+        
+        handleDateRangeChange('startDate', saturday);
+        handleDateRangeChange('endDate', sunday);
+        break;
+    }
+  };
+
+  const formatDateDisplay = (date: Date | null) => {
+    if (!date) return 'Select date';
+    
+    if (isToday(date)) {
+      return 'Today';
+    }
+    
+    return format(date, 'MMM d, yyyy');
+  };
+
+  const distanceOptions = [5, 10, 25, 50, 100];
+
   return (
     <>
       <View style={styles.filterContainer}>
         <View style={[styles.filterBar, { backgroundColor: theme.card + '95' }]}>
           <Pressable 
-            style={[styles.filterButton, { backgroundColor: theme.background }]}
+            style={[
+              styles.filterButton, 
+              { 
+                backgroundColor: getActiveFilterCount() > 0 ? theme.primary + '15' : theme.background,
+                borderColor: getActiveFilterCount() > 0 ? theme.primary : 'transparent',
+                borderWidth: 1
+              }
+            ]}
             onPress={() => setModalVisible(true)}
           >
-            <Ionicons name="options-outline" size={18} color={theme.text} />
-            <Text style={[styles.filterButtonText, { color: theme.text }]}>
+            <Ionicons name="options-outline" size={20} color={getActiveFilterCount() > 0 ? theme.primary : theme.text} />
+            <Text style={[styles.filterButtonText, { color: getActiveFilterCount() > 0 ? theme.primary : theme.text }]}>
               {getActiveFilterCount() > 0 ? 
                 `Filters (${getActiveFilterCount()})` : 
                 'Filters'}
@@ -254,12 +360,13 @@ export const EventFilters: React.FC<EventFiltersProps> = ({
                   handleFilterChange('searchQuery', '');
                   onFilterChange({ ...filters, searchQuery: '' });
                 }}
+                style={{ padding: 4 }}
               >
                 <Ionicons name="close-circle" size={18} color={theme.text + '80'} />
               </TouchableOpacity>
             )}
           </View>
-
+          
           <Pressable 
             style={[styles.sortButton, { backgroundColor: theme.background }]}
             onPress={() => setSortModalVisible(true)}
@@ -385,13 +492,19 @@ export const EventFilters: React.FC<EventFiltersProps> = ({
         onRequestClose={() => setModalVisible(false)}
       >
         <View style={[styles.centeredView, { backgroundColor: 'rgba(0,0,0,0.5)' }]}>
-          <View style={[styles.modalView, { 
-            backgroundColor: theme.background,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: -3 },
-            shadowOpacity: 0.1,
-            shadowRadius: 10,
-          }]}>
+          <Animated.View 
+            style={[
+              styles.modalView,
+              { 
+                backgroundColor: theme.background,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: -3 },
+                shadowOpacity: 0.1,
+                shadowRadius: 10,
+                height: filterHeight,
+              }
+            ]}
+          >
             <View style={styles.modalHeader}>
               <Text style={[styles.modalTitle, { color: theme.text }]}>Filter Events</Text>
               <TouchableOpacity 
@@ -525,6 +638,49 @@ export const EventFilters: React.FC<EventFiltersProps> = ({
                   </Text>
                 </View>
 
+                <View style={styles.filterSection}>
+                  <Text style={[styles.filterSectionTitle, { color: theme.text }]}>Date</Text>
+                  
+                  <View style={styles.datePresetContainer}>
+                    {datePresets.map((preset) => (
+                      <TouchableOpacity
+                        key={preset.value}
+                        style={[
+                          styles.datePresetButton,
+                          {
+                            backgroundColor: theme.text + '10',
+                          }
+                        ]}
+                        onPress={() => handleDatePreset(preset.value)}
+                      >
+                        <Text style={[styles.datePresetText, { color: theme.text }]}>
+                          {preset.label}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  
+                  <View style={styles.datePickersContainer}>
+                    <Pressable
+                      style={[styles.datePickerButton, { backgroundColor: theme.text + '10' }]}
+                      onPress={() => setShowStartDatePicker(true)}
+                    >
+                      <Ionicons name="calendar-outline" size={16} color={theme.text + 'CC'} style={styles.dateIcon} />
+                      <Text style={[styles.dateText, { color: theme.text }]}>
+                        {formatDateDisplay(filters.dateRange.startDate)}
+                      </Text>
+                    </Pressable>
+                    
+                    <Text style={[styles.toText, { color: theme.text + '80' }]}>to</Text>
+                    
+                    <Pressable
+                      style={[styles.datePickerButton, { backgroundColor: theme.text + '10' }]}
+                      onPress={() => setShowEndDatePicker(true)}
+                    >
+                      <Ionicons name="calendar-outline" size={16} color={theme.text + 'CC'} style={styles.dateIcon} />
+                      <Text style={[styles.dateText, { color: theme.text }]}>
+                        {formatDateDisplay(filters.dateRange.endDate)}
+                      </Text>
                 <View style={styles.distanceContainer}>
                   <View style={styles.sectionHeaderRow}>
                     <Text style={[styles.filterSectionTitle, { color: theme.text }]}>
@@ -714,6 +870,61 @@ export const EventFilters: React.FC<EventFiltersProps> = ({
 };
 
 const styles = StyleSheet.create({
+  container: {
+    marginVertical: 8,
+  },
+  searchRowContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    marginBottom: 8,
+    zIndex: 1,
+  },
+  searchBarContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    height: 44,
+    marginRight: 8,
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    height: '100%',
+    fontSize: 16,
+    fontFamily: 'Roboto',
+  },
+  clearSearchButton: {
+    padding: 4,
+  },
+  filterButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+  },
+  filterBadge: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  filterBadgeText: {
+    color: 'white',
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
   filterContainer: {
     zIndex: 1,
     paddingHorizontal: 16,
@@ -730,7 +941,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 16,
+    borderRadius: 8,
     marginRight: 8,
   },
   filterButtonText: {
@@ -742,13 +953,15 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 16,
+    borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.05)',
   },
   searchInput: {
     flex: 1,
-    fontSize: 12,
+    fontSize: 14,
     marginLeft: 8,
     padding: 0,
     fontFamily: 'Roboto',
@@ -758,7 +971,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: 40,
     height: 40,
-    borderRadius: 20,
+    borderRadius: 8,
     marginLeft: 8,
   },
   sortButtonDot: {
@@ -768,6 +981,7 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
+    backgroundColor: 'rgba(0,0,0,0.1)',
     alignItems: 'center',
     justifyContent: 'center',
   },
