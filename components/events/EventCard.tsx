@@ -26,9 +26,22 @@ export const EventCard: React.FC<EventCardProps> = ({ event, onPress }) => {
 
   useEffect(() => {
     const fetchCreator = async () => {
-      if (event.createdBy) {
-        const creatorData = await UserService.getUser(event.createdBy);
-        setCreator(creatorData);
+      try {
+        if (event.createdBy) {
+          const creatorData = await UserService.getUser(event.createdBy);
+          setCreator(creatorData || {
+            id: event.createdBy,
+            displayName: 'Unknown User',
+            photoURL: null
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching creator data:', error);
+        setCreator({
+          id: event.createdBy,
+          displayName: 'Unknown User',
+          photoURL: null
+        });
       }
     };
     fetchCreator();
@@ -125,31 +138,18 @@ export const EventCard: React.FC<EventCardProps> = ({ event, onPress }) => {
         </Text>
         
         <View style={styles.footer}>
-          <Pressable 
+          <TouchableOpacity 
             style={styles.creatorContainer}
-            onPress={(e: any) => {
-              e.stopPropagation();
-              if (creator?.id) {
-                router.push(`/profile/${creator.id}`);
-              }
-            }}
+            onPress={() => creator?.id && router.push(`/profile/${creator.id}`)}
           >
-            {creator?.photoURL ? (
-              <Image
-                source={{ uri: creator.photoURL }}
-                style={styles.creatorImage}
-              />
-            ) : (
-              <View style={[styles.creatorInitials, { backgroundColor: theme.primary }]}>
-                <Text style={styles.initialsText}>
-                  {getInitials(creator?.displayName || 'U')}
-                </Text>
-              </View>
-            )}
-            <Text style={[styles.creatorName, { color: theme.text + 'CC' }]}>
-              By {creator?.displayName || 'Unknown User'}
+            <Image 
+              source={creator?.photoURL ? { uri: creator.photoURL } : require('../../assets/default-avatar.png')} 
+              style={styles.creatorImage} 
+            />
+            <Text style={[styles.creatorName, { color: theme.text }]}>
+              {creator?.displayName || 'Unknown User'}
             </Text>
-          </Pressable>
+          </TouchableOpacity>
           
           <View style={[styles.attendeeChip, { backgroundColor: theme.primary + '20' }]}>
             <Ionicons name="people-outline" size={14} color={theme.primary} style={{ marginRight: 4 }} />

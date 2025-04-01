@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, FlatList, Image, Pressable, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, FlatList, Image, Pressable, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useFocusEffect } from 'expo-router';
@@ -52,11 +52,11 @@ const FriendItem = ({ friend, onPress, onRemove }: FriendItemProps) => {
   if (!userData) return null;
 
   return (
-    <Pressable 
-      style={[styles.friendItem, { backgroundColor: theme.card }]} 
+    <TouchableOpacity
+      style={[styles.friendItem, { backgroundColor: theme.card }]}
       onPress={onPress}
     >
-      {userData.photoURL ? (
+      {userData?.photoURL ? (
         <Image source={{ uri: userData.photoURL }} style={styles.avatar} />
       ) : (
         <View style={[styles.avatarPlaceholder, { backgroundColor: theme.border }]}>
@@ -66,10 +66,10 @@ const FriendItem = ({ friend, onPress, onRemove }: FriendItemProps) => {
       
       <View style={styles.friendInfo}>
         <Text style={[styles.friendName, { color: theme.text }]}>
-          {userData.displayName}
+          {userData?.displayName || 'Unknown User'}
         </Text>
         <Text style={[styles.friendBio, { color: theme.text }]} numberOfLines={1}>
-          {userData.bio || 'No bio available'}
+          {userData?.bio || 'No bio available'}
         </Text>
       </View>
       
@@ -79,7 +79,7 @@ const FriendItem = ({ friend, onPress, onRemove }: FriendItemProps) => {
         secondary
         style={styles.actionButton}
       />
-    </Pressable>
+    </TouchableOpacity>
   );
 };
 
@@ -122,11 +122,11 @@ const RequestItem = ({ request, onAccept, onReject, onPress }: RequestItemProps)
   if (!userData) return null;
 
   return (
-    <Pressable 
-      style={[styles.friendItem, { backgroundColor: theme.card }]} 
+    <TouchableOpacity
+      style={[styles.requestItem, { backgroundColor: theme.card }]}
       onPress={onPress}
     >
-      {userData.photoURL ? (
+      {userData?.photoURL ? (
         <Image source={{ uri: userData.photoURL }} style={styles.avatar} />
       ) : (
         <View style={[styles.avatarPlaceholder, { backgroundColor: theme.border }]}>
@@ -136,10 +136,10 @@ const RequestItem = ({ request, onAccept, onReject, onPress }: RequestItemProps)
       
       <View style={styles.friendInfo}>
         <Text style={[styles.friendName, { color: theme.text }]}>
-          {userData.displayName}
+          {userData?.displayName || 'Unknown User'}
         </Text>
         <Text style={[styles.friendBio, { color: theme.text }]} numberOfLines={1}>
-          {userData.bio || 'No bio available'}
+          {userData?.bio || 'No bio available'}
         </Text>
       </View>
       
@@ -156,7 +156,7 @@ const RequestItem = ({ request, onAccept, onReject, onPress }: RequestItemProps)
           style={styles.requestButton}
         />
       </View>
-    </Pressable>
+    </TouchableOpacity>
   );
 };
 
@@ -435,5 +435,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     textAlign: 'center',
     opacity: 0.7,
+  },
+  requestItem: {
+    flexDirection: 'row',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 8,
+    alignItems: 'center',
   },
 }); 

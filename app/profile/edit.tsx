@@ -96,13 +96,26 @@ export default function EditProfileScreen() {
 
   return (
     <ScrollView style={[styles.container, { backgroundColor: theme.background }]}>
-      <Stack.Screen
-        options={{
-          title: 'Edit Profile',
-          headerStyle: { backgroundColor: theme.background },
-          headerTintColor: theme.text,
-        }}
-      />
+      <View style={[styles.customHeader, { 
+        paddingTop: 50, 
+        paddingBottom: 10,
+        backgroundColor: theme.background,
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+      }]}>
+        <TouchableOpacity onPress={() => router.back()}>
+          <Ionicons name="arrow-back" size={24} color={theme.text} />
+        </TouchableOpacity>
+        <Text style={{ 
+          fontSize: 18, 
+          fontWeight: 'bold', 
+          color: theme.text,
+          marginLeft: 16
+        }}>
+          Edit Profile
+        </Text>
+      </View>
       
       <View style={styles.form}>
         <View style={styles.inputGroup}>
@@ -257,8 +270,8 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   label: {
-    fontSize: 14,
-    marginBottom: 6,
+    fontSize: 16,
+    marginBottom: 8,
     fontFamily: 'Roboto',
   },
   input: {
@@ -273,24 +286,24 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 12,
     fontSize: 16,
-    minHeight: 100,
+    height: 120,
     fontFamily: 'Roboto',
   },
   sectionTitle: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
-    marginTop: 8,
+    marginBottom: 16,
+    marginTop: 24,
   },
   sectionTitleText: {
     fontSize: 18,
     fontWeight: 'bold',
-    marginLeft: 8,
+    marginLeft: 10,
     fontFamily: 'Roboto',
   },
   interestInputRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    marginBottom: 12,
   },
   interestInput: {
     flex: 1,
@@ -298,39 +311,42 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 12,
     fontSize: 16,
-    marginRight: 8,
+    marginRight: 12,
     fontFamily: 'Roboto',
   },
   addButton: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    justifyContent: 'center',
+    width: 50,
+    height: 50,
+    borderRadius: 8,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   interestTags: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginTop: 12,
   },
   interestTag: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
+    padding: 8,
+    borderRadius: 20,
     marginRight: 8,
     marginBottom: 8,
   },
   interestText: {
     fontSize: 14,
-    marginRight: 4,
     fontFamily: 'Roboto',
   },
   removeInterest: {
-    padding: 2,
+    marginLeft: 4,
   },
   saveButton: {
-    marginTop: 20,
+    marginTop: 32,
+  },
+  customHeader: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
   },
 }); 

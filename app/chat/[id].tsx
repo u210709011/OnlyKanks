@@ -278,9 +278,9 @@ export default function ChatScreen() {
           <Ionicons name="arrow-back" size={24} color={theme.text} />
         </Pressable>
         
-        <Pressable 
-          style={styles.headerProfile}
-          onPress={() => otherUser && router.push(`/profile/${otherUser.id}`)}
+        <Pressable
+          style={styles.userInfoContainer}
+          onPress={() => otherUser?.id && router.push(`/profile/${otherUser.id}`)}
         >
           {otherUser?.photoURL ? (
             <Image source={{ uri: otherUser.photoURL }} style={styles.avatar} />
@@ -290,20 +290,9 @@ export default function ChatScreen() {
             </View>
           )}
           
-          <View style={styles.headerInfo}>
-            <Text style={[styles.headerTitle, { color: theme.text }]}>
-              {otherUser?.displayName || 'Chat'}
-            </Text>
-            {isOnline ? (
-              <Text style={[styles.headerSubtitle, { color: theme.primary }]}>
-                Online
-              </Text>
-            ) : lastSeen && (
-              <Text style={[styles.headerSubtitle, { color: theme.text, opacity: 0.7 }]}>
-                {formatLastSeen(lastSeen)}
-              </Text>
-            )}
-          </View>
+          <Text style={[styles.username, { color: theme.text }]}>
+            {otherUser?.displayName || 'Chat'}
+          </Text>
         </Pressable>
       </View>
       
@@ -408,7 +397,7 @@ const styles = StyleSheet.create({
   backButton: {
     padding: 8,
   },
-  headerProfile: {
+  userInfoContainer: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
@@ -519,5 +508,10 @@ const styles = StyleSheet.create({
     fontSize: 16,
     textAlign: 'center',
     marginBottom: 20,
+  },
+  username: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginLeft: 8,
   },
 }); 

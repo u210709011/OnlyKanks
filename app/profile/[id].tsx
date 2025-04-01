@@ -1,87 +1,116 @@
-import { View, Text, StyleSheet, Image, ScrollView, ActivityIndicator, TextInput } from 'react-native';
-import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
-import { useState, useEffect } from 'react';
-import { useTheme } from '../../context/theme.context';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, Pressable, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { User, UserService } from '../../services/user.service';
-import { Event } from '../../services/events.service';
+import { useTheme } from '../../context/theme.context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRouter, useLocalSearchParams } from 'expo-router';
+import { auth, db } from '../../config/firebase';
 import { collection, query, where, getDocs } from 'firebase/firestore';
-import { db } from '../../config/firebase';
-import { EventCard } from '../../components/events/EventCard';
-import { auth } from '../../config/firebase';
+import { Event } from '../../services/events.service';
 import { MessagesService } from '../../services/messages.service';
-import { CustomButton } from '../../components/shared/CustomButton';
 import { FriendsService, FriendRequestStatus } from '../../services/friends.service';
+import { User, UserService } from '../../services/user.service';
+import { CustomButton } from '../../components/shared/CustomButton';
 
-export default function ProfileScreen() {
-  const { id } = useLocalSearchParams();
+export default function UserProfileScreen() {
   const { theme } = useTheme();
+  const insets = useSafeAreaInsets();
   const router = useRouter();
-  const [user, setUser] = useState<User | null>(null);
+  const { id } = useLocalSearchParams(); 
+  
+  const [displayName, setDisplayName] = useState<string>('');
+  const [profileImage, setProfileImage] = useState<string | null>(null);
+  const [userBio, setUserBio] = useState<string>('');
   const [userEvents, setUserEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [friendshipStatus, setFriendshipStatus] = useState<'none' | 'sent' | 'received' | 'friends'>('none');
   const [friendRequestId, setFriendRequestId] = useState<string | undefined>(undefined);
   const [friendActionLoading, setFriendActionLoading] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
+  
+  const userId = id as string;
+
+  // Redirect to the profile tab if viewing your own profile
+  useEffect(() => {
+    if (auth.currentUser && userId === auth.currentUser.uid) {
+      router.replace('/(tabs)/profile');
+    }
+  }, [userId]);
 
   useEffect(() => {
-    const fetchUserAndEvents = async () => {
+    const fetchUserProfile = async () => {
       try {
-        // Fetch user profile
-        const userData = await UserService.getUser(id as string);
+        if (!userId) {
+          setError('User not found');
+          setLoading(false);
+          return;
+        }
+        
+        // Get user data
+        const userData = await UserService.getUser(userId);
         if (userData) {
           setUser(userData);
-          
-          // Fetch user's events
-          const eventsRef = collection(db, 'events');
-          const q = query(eventsRef, where('createdBy', '==', id));
-          const querySnapshot = await getDocs(q);
-          const events = querySnapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-          })) as Event[];
-          setUserEvents(events);
-          
-          // Fetch friendship status
-          if (auth.currentUser && auth.currentUser.uid !== id) {
-            const status = await FriendsService.getFriendRequestStatus(id as string);
-            setFriendshipStatus(status.status);
-            setFriendRequestId(status.requestId);
-          }
+          setDisplayName(userData.displayName || 'User');
+          setProfileImage(userData.photoURL || null);
+          setUserBio(userData.bio || '');
         } else {
           setError('User not found');
+          setLoading(false);
+          return;
+        }
+        
+        // Fetch user's events
+        try {
+          const eventsQuery = query(
+            collection(db, 'events'),
+            where('createdBy', '==', userId)
+          );
+          const eventsSnapshot = await getDocs(eventsQuery);
+          const eventsData = eventsSnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          } as Event));
+          setUserEvents(eventsData);
+        } catch (error) {
+          console.error('Error fetching user events:', error);
+        }
+        
+        // Fetch friendship status if viewing someone else's profile
+        if (auth.currentUser) {
+          const status = await FriendsService.getFriendRequestStatus(userId);
+          setFriendshipStatus(status.status);
+          setFriendRequestId(status.requestId);
         }
       } catch (error) {
-        console.error('Error fetching user:', error);
+        console.error('Error fetching user profile:', error);
         setError('Error loading profile');
       } finally {
         setLoading(false);
       }
     };
-
-    fetchUserAndEvents();
-  }, [id]);
+    
+    fetchUserProfile();
+  }, [userId]);
 
   const handleMessage = async () => {
-    if (!auth.currentUser || auth.currentUser.uid === id) return;
+    if (!auth.currentUser) return;
     
     try {
       // Create or get a chat and navigate to it
-      const chatId = await MessagesService.createOrGetChat(id as string);
+      const chatId = await MessagesService.createOrGetChat(userId);
       router.push(`/chat/${chatId}`);
     } catch (error) {
       console.error('Error creating chat:', error);
-      setError('Failed to start chat');
     }
   };
   
   const handleSendFriendRequest = async () => {
-    if (!auth.currentUser || auth.currentUser.uid === id) return;
+    if (!auth.currentUser) return;
     
     setFriendActionLoading(true);
     try {
-      await FriendsService.sendFriendRequest(id as string);
+      await FriendsService.sendFriendRequest(userId);
       setFriendshipStatus('sent');
     } catch (error) {
       console.error('Error sending friend request:', error);
@@ -136,11 +165,11 @@ export default function ProfileScreen() {
   };
   
   const handleRemoveFriend = async () => {
-    if (!id) return;
+    if (!userId) return;
     
     setFriendActionLoading(true);
     try {
-      await FriendsService.removeFriend(id as string);
+      await FriendsService.removeFriend(userId);
       setFriendshipStatus('none');
     } catch (error) {
       console.error('Error removing friend:', error);
@@ -149,10 +178,11 @@ export default function ProfileScreen() {
     }
   };
 
+  // Show empty header while loading to prevent showing [id]
   if (loading) {
     return (
       <View style={[styles.container, { backgroundColor: theme.background }]}>
-        <ActivityIndicator size="large" color={theme.text} />
+        <ActivityIndicator style={{ marginTop: insets.top + 50 }} size="large" color={theme.primary} />
       </View>
     );
   }
@@ -160,92 +190,61 @@ export default function ProfileScreen() {
   if (error || !user) {
     return (
       <View style={[styles.container, { backgroundColor: theme.background }]}>
-        <Text style={[styles.errorText, { color: theme.text }]}>{error}</Text>
+        <Text style={[styles.errorText, { color: theme.text, marginTop: insets.top + 50 }]}>
+          {error || 'User not found'}
+        </Text>
       </View>
     );
   }
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: theme.background }]}>
-      <Stack.Screen
-        options={{
-          headerStyle: { backgroundColor: theme.background },
-          headerTintColor: theme.text,
+    <View style={[styles.container, { backgroundColor: theme.background }]}>
+      <ScrollView
+        contentContainerStyle={{ 
+          paddingTop: insets.top,
+          paddingBottom: insets.bottom + 20
         }}
-      />
-      <View style={styles.profileHeader}>
-        {user.photoURL ? (
-          <Image source={{ uri: user.photoURL }} style={styles.profileImage} />
-        ) : (
-          <View style={[styles.profileImagePlaceholder, { backgroundColor: theme.border }]}>
-            <Ionicons name="person" size={40} color={theme.text} />
-          </View>
-        )}
-        
-        <Text style={[styles.displayName, { color: theme.text }]}>
-          {user.displayName}
-        </Text>
-        
-        {/* Add Edit Profile button when viewing your own profile */}
-        {auth.currentUser?.uid === id && (
-          <CustomButton
-            title="Edit Profile"
-            onPress={() => router.push('/profile/edit')}
-            style={styles.editButton}
-            secondary
-          />
-        )}
-        
-        <View style={styles.profileDetails}>
-          {/* Bio Section */}
-          <View style={styles.profileSection}>
-            <View style={styles.sectionHeader}>
-              <Ionicons name="information-circle-outline" size={18} color={theme.text} />
-              <Text style={[styles.sectionTitle, { color: theme.text }]}>Bio</Text>
+      >
+        {/* Profile section */}
+        <View style={styles.profileSection}>
+          {/* Back button at the top */}
+          <TouchableOpacity 
+            style={styles.backButton}
+            onPress={() => router.back()}
+          >
+            <Ionicons name="arrow-back" size={24} color={theme.text} />
+          </TouchableOpacity>
+
+          <View style={styles.profileHeader}>
+            <Image 
+              source={profileImage ? { uri: profileImage } : require('../../assets/default-avatar.png')} 
+              style={styles.profileImage}
+            />
+            
+            <View style={styles.statsContainer}>
+              <View style={styles.statItem}>
+                <Text style={[styles.statNumber, { color: theme.text }]}>{userEvents.length}</Text>
+                <Text style={[styles.statLabel, { color: theme.text + '80' }]}>Events</Text>
+              </View>
+              
+              <View style={styles.statItem}>
+                <Text style={[styles.statNumber, { color: theme.text }]}>142</Text>
+                <Text style={[styles.statLabel, { color: theme.text + '80' }]}>Friends</Text>
+              </View>
+              
+              <View style={styles.statItem}>
+                <Text style={[styles.statNumber, { color: theme.text }]}>38</Text>
+                <Text style={[styles.statLabel, { color: theme.text + '80' }]}>Attending</Text>
+              </View>
             </View>
-            <Text style={[styles.sectionContent, { color: theme.text }]}>
-              {user.bio || 'No bio available'}
-            </Text>
           </View>
           
-          {/* Location Section */}
-          {(user.location?.city || user.location?.province) && (
-            <View style={styles.profileSection}>
-              <View style={styles.sectionHeader}>
-                <Ionicons name="location-outline" size={18} color={theme.text} />
-                <Text style={[styles.sectionTitle, { color: theme.text }]}>Location</Text>
-              </View>
-              <Text style={[styles.sectionContent, { color: theme.text }]}>
-                {[user.location.city, user.location.province].filter(Boolean).join(', ')}
-              </Text>
-            </View>
-          )}
+          <Text style={[styles.displayName, { color: theme.text }]}>{displayName}</Text>
           
-          {/* Interests Section */}
-          {user.interests && user.interests.length > 0 && (
-            <View style={styles.profileSection}>
-              <View style={styles.sectionHeader}>
-                <Ionicons name="heart-outline" size={18} color={theme.text} />
-                <Text style={[styles.sectionTitle, { color: theme.text }]}>Interests</Text>
-              </View>
-              <View style={styles.interestsContainer}>
-                {user.interests.map((interest, index) => (
-                  <View 
-                    key={index} 
-                    style={[styles.interestTag, { backgroundColor: theme.primary + '20' }]}
-                  >
-                    <Text style={[styles.interestText, { color: theme.primary }]}>
-                      {interest}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-            </View>
-          )}
-        </View>
-        
-        {/* Only show action buttons if not viewing own profile */}
-        {auth.currentUser?.uid !== id && (
+          <Text style={[styles.bio, { color: theme.text }]}>
+            {userBio || 'No bio yet.'}
+          </Text>
+          
           <View style={styles.actionButtons}>
             {/* Friend Request Buttons based on status */}
             {friendshipStatus === 'none' && (
@@ -268,18 +267,18 @@ export default function ProfileScreen() {
             )}
             
             {friendshipStatus === 'received' && (
-              <View style={styles.requestButtons}>
+              <View style={styles.rowButtons}>
                 <CustomButton
                   title="Accept"
                   onPress={handleAcceptFriendRequest}
                   loading={friendActionLoading}
-                  style={[styles.actionButton, styles.requestButton]}
+                  style={[styles.actionButton, styles.halfButton]}
                 />
                 <CustomButton
-                  title="Reject"
+                  title="Decline"
                   onPress={handleRejectFriendRequest}
                   loading={friendActionLoading}
-                  style={[styles.actionButton, styles.requestButton]}
+                  style={[styles.actionButton, styles.halfButton]}
                   secondary
                 />
               </View>
@@ -287,7 +286,7 @@ export default function ProfileScreen() {
             
             {friendshipStatus === 'friends' && (
               <CustomButton
-                title="Remove Friend"
+                title="Friends"
                 onPress={handleRemoveFriend}
                 loading={friendActionLoading}
                 style={styles.actionButton}
@@ -296,29 +295,66 @@ export default function ProfileScreen() {
             )}
             
             {/* Message button */}
-            <CustomButton
-              title="Send Message"
+            <TouchableOpacity
+              style={[styles.messageButton, { backgroundColor: theme.primary + '20' }]}
               onPress={handleMessage}
-              style={styles.actionButton}
-            />
+            >
+              <Ionicons name="chatbubble-outline" size={18} color={theme.primary} />
+              <Text style={[styles.messageButtonText, { color: theme.primary }]}>Message</Text>
+            </TouchableOpacity>
           </View>
-        )}
-      </View>
-
-      <Text style={[styles.sectionTitle, { color: theme.text }]}>
-        Events by {user.displayName}
-      </Text>
-
-      {userEvents.length > 0 ? (
-        userEvents.map(event => (
-          <EventCard key={event.id} event={event} />
-        ))
-      ) : (
-        <Text style={[styles.noEvents, { color: theme.text }]}>
-          No events created yet
-        </Text>
-      )}
-    </ScrollView>
+        </View>
+        
+        {/* Tabs for Events */}
+        <View style={[styles.tabsContainer, { borderBottomColor: theme.border }]}>
+          <TouchableOpacity style={[styles.tabButton, styles.activeTab]}>
+            <Ionicons name="calendar" size={24} color={theme.primary} />
+          </TouchableOpacity>
+        </View>
+        
+        {/* Events Grid/List */}
+        <View style={styles.eventsContainer}>
+          {userEvents.length === 0 ? (
+            <View style={styles.emptyEventsContainer}>
+              <View style={[styles.emptyIconContainer, { backgroundColor: theme.card }]}>
+                <Ionicons name="calendar-outline" size={32} color={theme.primary} />
+              </View>
+              <Text style={[styles.emptyEventsText, { color: theme.text }]}>No events yet</Text>
+              <Text style={[styles.emptyEventsSubtext, { color: theme.text + '80' }]}>
+                This user has not created any events yet
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.eventsGrid}>
+              {userEvents.map(event => (
+                <Pressable 
+                  key={event.id} 
+                  style={styles.eventItem}
+                  onPress={() => router.push(`/event/${event.id}`)}
+                >
+                  {event.imageUrl ? (
+                    <Image 
+                      source={{ uri: event.imageUrl }} 
+                      style={styles.eventImage}
+                    />
+                  ) : (
+                    <View style={[styles.eventImagePlaceholder, { backgroundColor: theme.card }]}>
+                      <Ionicons name="calendar-outline" size={32} color={theme.primary} />
+                    </View>
+                  )}
+                  <Text 
+                    style={[styles.eventTitle, { color: theme.text }]} 
+                    numberOfLines={1}
+                  >
+                    {event.title}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
+        </View>
+      </ScrollView>
+    </View>
   );
 }
 
@@ -326,105 +362,157 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  profileSection: {
+    padding: 16,
+  },
   profileHeader: {
+    flexDirection: 'row',
     alignItems: 'center',
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    marginBottom: 16,
   },
   profileImage: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    marginBottom: 10,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    marginRight: 24,
   },
-  profileImagePlaceholder: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  displayName: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    marginBottom: 10,
-    fontFamily: 'Roboto',
-  },
-  profileDetails: {
-    width: '100%',
-    marginTop: 10,
-    marginBottom: 15,
-  },
-  profileSection: {
-    marginBottom: 16,
-    width: '100%',
-  },
-  sectionHeader: {
+  statsContainer: {
+    flex: 1,
     flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+  statItem: {
     alignItems: 'center',
-    marginBottom: 6,
   },
-  sectionTitle: {
-    fontSize: 16,
+  statNumber: {
+    fontSize: 18,
     fontWeight: 'bold',
-    marginLeft: 8,
     fontFamily: 'Roboto',
   },
-  sectionContent: {
-    fontSize: 14,
-    lineHeight: 20,
-    paddingLeft: 26,
-    fontFamily: 'Roboto',
-  },
-  interestsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    paddingLeft: 26,
-  },
-  interestTag: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    marginRight: 8,
-    marginBottom: 8,
-  },
-  interestText: {
+  statLabel: {
     fontSize: 12,
     fontFamily: 'Roboto',
   },
+  bio: {
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 16,
+    fontFamily: 'Roboto',
+  },
   actionButtons: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginTop: 10,
-    flexWrap: 'wrap',
+    marginTop: 8,
   },
   actionButton: {
-    marginTop: 8,
-    minWidth: 120,
+    marginVertical: 8,
   },
-  editButton: {
+  rowButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  halfButton: {
+    flex: 0.48,
+  },
+  messageButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 8,
     marginTop: 8,
+  },
+  messageButtonText: {
+    marginLeft: 8,
+    fontSize: 14,
+    fontWeight: '500',
+    fontFamily: 'Roboto',
+  },
+  tabsContainer: {
+    flexDirection: 'row',
+    marginTop: 16,
+    borderBottomWidth: 1,
+  },
+  tabButton: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  activeTab: {
+    borderBottomWidth: 2,
+    borderBottomColor: '#5C6BC0',
+  },
+  eventsContainer: {
+    padding: 16,
+  },
+  emptyEventsContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 32,
+  },
+  emptyIconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
     marginBottom: 16,
-    width: 140,
+  },
+  emptyEventsText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 8,
+    fontFamily: 'Roboto',
+  },
+  emptyEventsSubtext: {
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 24,
+    paddingHorizontal: 32,
+    fontFamily: 'Roboto',
+  },
+  eventsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  eventItem: {
+    width: '48%',
+    marginBottom: 16,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  eventImage: {
+    width: '100%',
+    height: 120,
+  },
+  eventImagePlaceholder: {
+    width: '100%',
+    height: 120,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  eventTitle: {
+    fontSize: 14,
+    fontWeight: '500',
+    padding: 8,
+    fontFamily: 'Roboto',
   },
   errorText: {
     fontSize: 16,
     textAlign: 'center',
-    margin: 16,
-  },
-  requestButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  requestButton: {
-    flex: 1,
-    marginHorizontal: 4,
-  },
-  noEvents: {
-    textAlign: 'center',
     padding: 20,
-    opacity: 0.7,
+    fontFamily: 'Roboto',
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  displayName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 8,
+    fontFamily: 'Roboto',
   },
 }); 

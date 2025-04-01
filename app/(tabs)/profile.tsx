@@ -1,200 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, Pressable, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/theme.context';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { auth, db } from '../../config/firebase';
-import { doc, getDoc } from 'firebase/firestore';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { Event } from '../../services/events.service';
-
-export default function ProfileScreen() {
-  const { theme } = useTheme();
-  const insets = useSafeAreaInsets();
-  const router = useRouter();
-  const [displayName, setDisplayName] = useState<string>('');
-  const [profileImage, setProfileImage] = useState<string | null>(null);
-  const [userBio, setUserBio] = useState<string>('');
-  const [userEvents, setUserEvents] = useState<Event[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const fetchUserProfile = async () => {
-      if (auth.currentUser) {
-        // Set display name and photo from auth
-        setDisplayName(auth.currentUser.displayName || 'User');
-        setProfileImage(auth.currentUser.photoURL);
-        
-        // Get additional user data from Firestore
-        try {
-          const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
-          if (userDoc.exists()) {
-            const userData = userDoc.data();
-            setUserBio(userData.bio || '');
-          }
-        } catch (error) {
-          console.error('Error fetching user profile:', error);
-        }
-        
-        // Fetch user's events
-        try {
-          const eventsQuery = query(
-            collection(db, 'events'),
-            where('createdBy', '==', auth.currentUser.uid)
-          );
-          const eventsSnapshot = await getDocs(eventsQuery);
-          const eventsData = eventsSnapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-          } as Event));
-          setUserEvents(eventsData);
-        } catch (error) {
-          console.error('Error fetching user events:', error);
-        }
-      }
-      setLoading(false);
-    };
-    
-    fetchUserProfile();
-  }, []);
-
-  return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
-      {/* Header with settings button */}
-      <View style={[styles.header, { 
-        backgroundColor: theme.background,
-        paddingTop: insets.top,
-        borderBottomColor: theme.border 
-      }]}>
-        <Text style={[styles.username, { color: theme.text }]}>
-          {displayName}
-        </Text>
-        <TouchableOpacity 
-          style={styles.settingsButton}
-          onPress={() => router.push('/settings')}
-        >
-          <Ionicons name="settings-outline" size={24} color={theme.text} />
-        </TouchableOpacity>
-      </View>
-      
-      <ScrollView
-        contentContainerStyle={{ 
-          paddingBottom: insets.bottom + 72
-        }}
-      >
-        {/* Profile section */}
-        <View style={styles.profileSection}>
-          <View style={styles.profileHeader}>
-            <Image 
-              source={profileImage ? { uri: profileImage } : require('../../assets/default-avatar.png')} 
-              style={styles.profileImage}
-            />
-            
-            <View style={styles.statsContainer}>
-              <View style={styles.statItem}>
-                <Text style={[styles.statNumber, { color: theme.text }]}>{userEvents.length}</Text>
-                <Text style={[styles.statLabel, { color: theme.text + '80' }]}>Events</Text>
-              </View>
-              
-              <View style={styles.statItem}>
-                <Text style={[styles.statNumber, { color: theme.text }]}>142</Text>
-                <Text style={[styles.statLabel, { color: theme.text + '80' }]}>Friends</Text>
-              </View>
-              
-              <View style={styles.statItem}>
-                <Text style={[styles.statNumber, { color: theme.text }]}>38</Text>
-                <Text style={[styles.statLabel, { color: theme.text + '80' }]}>Attending</Text>
-              </View>
-            </View>
-          </View>
-          
-          <Text style={[styles.bio, { color: theme.text }]}>
-            {userBio || 'No bio yet. Edit your profile to add one.'}
-          </Text>
-          
-          <TouchableOpacity 
-            style={[styles.editProfileButton, { borderColor: theme.border }]}
-            onPress={() => router.push('/edit-profile')}
-          >
-            <Text style={[styles.editProfileText, { color: theme.text }]}>Edit Profile</Text>
-          </TouchableOpacity>
-        </View>
-        
-        {/* Messages Button */}
-        <TouchableOpacity
-          style={[styles.messagesButton, { backgroundColor: theme.card }]}
-          onPress={() => router.push('/messages')}
-        >
-          <Ionicons name="chatbubbles-outline" size={20} color={theme.text} />
-          <Text style={[styles.messagesText, { color: theme.text }]}>Messages</Text>
-        </TouchableOpacity>
-        
-        {/* Friends Button */}
-        <TouchableOpacity
-          style={[styles.messagesButton, { backgroundColor: theme.card }]}
-          onPress={() => router.push('/friends')}
-        >
-          <Ionicons name="people-outline" size={20} color={theme.text} />
-          <Text style={[styles.messagesText, { color: theme.text }]}>Friends</Text>
-        </TouchableOpacity>
-        
-        {/* Tabs for Events */}
-        <View style={[styles.tabsContainer, { borderBottomColor: theme.border }]}>
-          <TouchableOpacity style={[styles.tabButton, styles.activeTab]}>
-            <Ionicons name="calendar" size={24} color={theme.primary} />
-          </TouchableOpacity>
-        </View>
-        
-        {/* Events Grid/List */}
-        <View style={styles.eventsContainer}>
-          {userEvents.length === 0 ? (
-            <View style={styles.emptyEventsContainer}>
-              <View style={[styles.emptyIconContainer, { backgroundColor: theme.card }]}>
-                <Ionicons name="calendar-outline" size={32} color={theme.primary} />
-              </View>
-              <Text style={[styles.emptyEventsText, { color: theme.text }]}>No events yet</Text>
-              <Text style={[styles.emptyEventsSubtext, { color: theme.text + '80' }]}>
-                Create your first event to see it here
-              </Text>
-              <TouchableOpacity 
-                style={[styles.createEventButton, { backgroundColor: theme.primary }]}
-                onPress={() => router.push('/(tabs)/create-event')}
-              >
-                <Text style={styles.createEventText}>Create Event</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <View style={styles.eventsGrid}>
-              {userEvents.map(event => (
-                <Pressable 
-                  key={event.id} 
-                  style={styles.eventItem}
-                  onPress={() => router.push(`/event/${event.id}`)}
-                >
-                  <Image 
-                    source={
-                      event.imageUrl 
-                        ? { uri: event.imageUrl } 
-                        : require('../../assets/event-placeholder.png')
-                    } 
-                    style={styles.eventImage}
-                  />
-                  <Text 
-                    style={[styles.eventTitle, { color: theme.text }]} 
-                    numberOfLines={1}
-                  >
-                    {event.title}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          )}
-        </View>
-      </ScrollView>
-    </View>
-  );
-}
+import { UserService } from '../../services/user.service';
 
 const styles = StyleSheet.create({
   container: {
@@ -212,6 +25,15 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: 'bold',
     fontFamily: 'Roboto',
+    flex: 1,
+    textAlign: 'center',
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   settingsButton: {
     width: 40,
@@ -251,18 +73,54 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: 'Roboto',
   },
+  displayName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 8,
+    fontFamily: 'Roboto',
+  },
   bio: {
     fontSize: 14,
+    lineHeight: 20,
     marginBottom: 16,
     fontFamily: 'Roboto',
   },
-  editProfileButton: {
+  editButton: {
     borderWidth: 1,
-    borderRadius: 4,
+    borderRadius: 8,
     paddingVertical: 8,
+    paddingHorizontal: 12,
     alignItems: 'center',
+    marginTop: 8,
   },
-  editProfileText: {
+  editButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+    fontFamily: 'Roboto',
+  },
+  actionButtons: {
+    marginTop: 8,
+  },
+  actionButton: {
+    marginVertical: 8,
+  },
+  rowButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  halfButton: {
+    flex: 0.48,
+  },
+  messageButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 8,
+    marginTop: 8,
+  },
+  messageButtonText: {
+    marginLeft: 8,
     fontSize: 14,
     fontWeight: '500',
     fontFamily: 'Roboto',
@@ -270,61 +128,45 @@ const styles = StyleSheet.create({
   messagesButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    padding: 16,
     marginHorizontal: 16,
-    marginBottom: 12,
-    padding: 12,
-    borderRadius: 8,
+    marginVertical: 8,
+    borderRadius: 12,
   },
   messagesText: {
-    marginLeft: 8,
-    fontSize: 14,
+    marginLeft: 12,
+    fontSize: 16,
+    fontWeight: '500',
     fontFamily: 'Roboto',
   },
   tabsContainer: {
     flexDirection: 'row',
-    borderBottomWidth: 1,
     marginTop: 16,
+    borderBottomWidth: 1,
   },
   tabButton: {
-    flexGrow: 1,
+    flex: 1,
     alignItems: 'center',
     paddingVertical: 12,
   },
   activeTab: {
     borderBottomWidth: 2,
-    borderBottomColor: '#3498db',
+    borderBottomColor: '#5C6BC0',
   },
   eventsContainer: {
-    padding: 8,
-  },
-  eventsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
-  eventItem: {
-    width: '33.33%',
-    padding: 2,
-  },
-  eventImage: {
-    width: '100%',
-    height: 120,
-    borderRadius: 4,
-  },
-  eventTitle: {
-    fontSize: 12,
-    marginTop: 4,
-    fontFamily: 'Roboto',
+    padding: 16,
   },
   emptyEventsContainer: {
-    padding: 24,
     alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 32,
   },
   emptyIconContainer: {
     width: 64,
     height: 64,
     borderRadius: 32,
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
     marginBottom: 16,
   },
   emptyEventsText: {
@@ -336,17 +178,262 @@ const styles = StyleSheet.create({
   emptyEventsSubtext: {
     fontSize: 14,
     textAlign: 'center',
-    marginBottom: 16,
+    marginBottom: 24,
+    paddingHorizontal: 32,
     fontFamily: 'Roboto',
   },
   createEventButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
   },
   createEventText: {
-    color: 'white',
-    fontWeight: '500',
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
     fontFamily: 'Roboto',
   },
-}); 
+  eventsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  eventItem: {
+    width: '48%',
+    marginBottom: 16,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  eventImage: {
+    width: '100%',
+    height: 120,
+  },
+  eventImagePlaceholder: {
+    width: '100%',
+    height: 120,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  eventTitle: {
+    fontSize: 14,
+    fontWeight: '500',
+    padding: 8,
+    fontFamily: 'Roboto',
+  },
+  errorText: {
+    fontSize: 16,
+    textAlign: 'center',
+    padding: 20,
+    fontFamily: 'Roboto',
+  },
+});
+
+export default function ProfileScreen() {
+  const { theme } = useTheme();
+  const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const params = useLocalSearchParams(); 
+  
+  const [displayName, setDisplayName] = useState<string>('');
+  const [profileImage, setProfileImage] = useState<string | null>(null);
+  const [userBio, setUserBio] = useState<string>('');
+  const [userEvents, setUserEvents] = useState<Event[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  
+  // Determine if this is for the current user
+  const currentUserId = auth.currentUser?.uid;
+  const paramId = params.id as string | undefined;
+
+  // If an ID is provided in the params and it's not the current user, redirect to the profile page
+  useEffect(() => {
+    if (paramId && paramId !== currentUserId) {
+      router.replace(`/profile/${paramId}`);
+    }
+  }, [paramId, currentUserId]);
+
+  useEffect(() => {
+    const fetchUserProfile = async () => {
+      try {
+        if (!currentUserId) {
+          setError('User not logged in');
+          setLoading(false);
+          return;
+        }
+        
+        // Get user data
+        const userData = await UserService.getUser(currentUserId);
+        if (userData) {
+          setDisplayName(userData.displayName || 'User');
+          setProfileImage(userData.photoURL || null);
+          setUserBio(userData.bio || '');
+        } else {
+          setError('User not found');
+          setLoading(false);
+          return;
+        }
+        
+        // Fetch user's events
+        try {
+          const eventsQuery = query(
+            collection(db, 'events'),
+            where('createdBy', '==', currentUserId)
+          );
+          const eventsSnapshot = await getDocs(eventsQuery);
+          const eventsData = eventsSnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          } as Event));
+          setUserEvents(eventsData);
+        } catch (error) {
+          console.error('Error fetching user events:', error);
+        }
+      } catch (error) {
+        console.error('Error fetching user profile:', error);
+        setError('Error loading profile');
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchUserProfile();
+  }, [currentUserId]);
+  
+  const handleEditProfile = () => {
+    router.push('/profile/edit');
+  };
+
+  if (loading) {
+    return (
+      <View style={[styles.container, { backgroundColor: theme.background }]}>
+        <ActivityIndicator size="large" color={theme.primary} />
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={[styles.container, { backgroundColor: theme.background }]}>
+        <Text style={[styles.errorText, { color: theme.text }]}>{error}</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={[styles.container, { backgroundColor: theme.background }]}>
+      {/* Header with profile title and settings button */}
+      <View style={[styles.header, { 
+        paddingTop: insets.top,
+        backgroundColor: theme.background,
+        borderBottomColor: theme.border,
+        borderBottomWidth: 1
+      }]}>
+        <View style={{ width: 40 }} />
+        <Text style={[styles.username, { color: theme.text }]}>{auth.currentUser?.displayName}</Text>
+        <TouchableOpacity
+          style={styles.settingsButton}
+          onPress={() => router.push('/settings')}
+        >
+          <Ionicons name="settings-outline" size={24} color={theme.text} />
+        </TouchableOpacity>
+      </View>
+      
+      <ScrollView
+        contentContainerStyle={{ 
+          paddingBottom: insets.bottom + 20
+        }}
+      >
+        {/* Profile section */}
+        <View style={styles.profileSection}>
+          <View style={styles.profileHeader}>
+            <Image 
+              source={profileImage ? { uri: profileImage } : require('../../assets/default-avatar.png')} 
+              style={styles.profileImage}
+            />
+            
+            <View style={styles.statsContainer}>
+              <View style={styles.statItem}>
+                <Text style={[styles.statNumber, { color: theme.text }]}>{userEvents.length}</Text>
+                <Text style={[styles.statLabel, { color: theme.text + '80' }]}>Events</Text>
+              </View>
+              
+              <View style={styles.statItem}>
+                <Text style={[styles.statNumber, { color: theme.text }]}>142</Text>
+                <Text style={[styles.statLabel, { color: theme.text + '80' }]}>Friends</Text>
+              </View>
+              
+              <View style={styles.statItem}>
+                <Text style={[styles.statNumber, { color: theme.text }]}>38</Text>
+                <Text style={[styles.statLabel, { color: theme.text + '80' }]}>Attending</Text>
+              </View>
+            </View>
+          </View>
+          
+          <Text style={[styles.displayName, { color: theme.text }]}>
+            {displayName}
+          </Text>
+          
+          <Text style={[styles.bio, { color: theme.text }]}>
+            {userBio || 'No bio yet.'}
+          </Text>
+          
+          <TouchableOpacity
+            style={[styles.editButton, { borderColor: theme.border }]}
+            onPress={handleEditProfile}
+          >
+            <Text style={[styles.editButtonText, { color: theme.text }]}>Edit Profile</Text>
+          </TouchableOpacity>
+        </View>
+        
+        {/* Tabs for Events */}
+        <View style={[styles.tabsContainer, { borderBottomColor: theme.border }]}>
+          <TouchableOpacity style={[styles.tabButton, styles.activeTab]}>
+            <Ionicons name="calendar" size={24} color={theme.primary} />
+          </TouchableOpacity>
+        </View>
+        
+        {/* Events Grid/List */}
+        <View style={styles.eventsContainer}>
+          {userEvents.length === 0 ? (
+            <View style={styles.emptyEventsContainer}>
+              <View style={[styles.emptyIconContainer, { backgroundColor: theme.card }]}>
+                <Ionicons name="calendar-outline" size={32} color={theme.primary} />
+              </View>
+              <Text style={[styles.emptyEventsText, { color: theme.text }]}>No events yet</Text>
+              <Text style={[styles.emptyEventsSubtext, { color: theme.text + '80' }]}>
+                Create your first event by tapping the "+" button on the home tab
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.eventsGrid}>
+              {userEvents.map(event => (
+                <Pressable 
+                  key={event.id} 
+                  style={styles.eventItem}
+                  onPress={() => router.push(`/event/${event.id}`)}
+                >
+                  {event.imageUrl ? (
+                    <Image 
+                      source={{ uri: event.imageUrl }} 
+                      style={styles.eventImage}
+                    />
+                  ) : (
+                    <View style={[styles.eventImagePlaceholder, { backgroundColor: theme.card }]}>
+                      <Ionicons name="calendar-outline" size={32} color={theme.primary} />
+                    </View>
+                  )}
+                  <Text 
+                    style={[styles.eventTitle, { color: theme.text }]} 
+                    numberOfLines={1}
+                  >
+                    {event.title}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
+        </View>
+      </ScrollView>
+    </View>
+  );
+} 

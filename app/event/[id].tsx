@@ -10,6 +10,13 @@ import { format } from 'date-fns';
 import { Event } from '../../services/events.service';
 import { UserService } from '../../services/user.service';
 
+// Define a type for creator data
+interface CreatorData {
+  displayName: string;
+  photoURL?: string | null;
+  bio?: string;
+}
+
 export default function EventScreen() {
   const { id } = useLocalSearchParams();
   const [event, setEvent] = useState<Event | null>(null);
@@ -17,7 +24,7 @@ export default function EventScreen() {
   const [error, setError] = useState<string | null>(null);
   const { theme } = useTheme();
   const router = useRouter();
-  const [creator, setCreator] = useState<{ displayName: string; photoURL?: string; bio?: string } | null>(null);
+  const [creator, setCreator] = useState<CreatorData | null>(null);
 
   useEffect(() => {
     const fetchEventAndCreator = async () => {
@@ -38,6 +45,13 @@ export default function EventScreen() {
           const creatorData = await UserService.getUser(eventData.createdBy);
           if (creatorData) {
             setCreator(creatorData);
+          } else {
+            // Set default creator data if not found
+            setCreator({
+              displayName: 'Unknown User',
+              photoURL: null,
+              bio: ''
+            });
           }
         } else {
           setError('Event not found');
@@ -96,29 +110,16 @@ export default function EventScreen() {
         
         {/* Creator information */}
         <Pressable 
-          style={styles.creatorSection}
-          onPress={() => router.push(`/profile/${event.createdBy}`)}
+          style={styles.creatorContainer}
+          onPress={() => event.createdBy && router.push(`/profile/${event.createdBy}`)}
         >
-          <View style={styles.creatorHeader}>
-            {creator?.photoURL ? (
-              <Image 
-                source={{ uri: creator.photoURL }} 
-                style={styles.creatorImage}
-              />
-            ) : (
-              <View style={[styles.creatorImagePlaceholder, { backgroundColor: theme.border }]}>
-                <Ionicons name="person" size={20} color={theme.text} />
-              </View>
-            )}
-            <View style={styles.creatorInfo}>
-              <Text style={[styles.creatorName, { color: theme.text }]}>
-                {creator?.displayName || 'Unknown User'}
-              </Text>
-              <Text style={[styles.creatorBio, { color: theme.text }]} numberOfLines={2}>
-                {creator?.bio || 'No bio available'}
-              </Text>
-            </View>
-          </View>
+          <Image 
+            source={creator?.photoURL ? { uri: creator.photoURL } : require('../../assets/default-avatar.png')} 
+            style={styles.creatorImage} 
+          />
+          <Text style={[styles.creatorName, { color: theme.text }]}>
+            By {creator?.displayName || 'Unknown User'}
+          </Text>
         </Pressable>
 
         <View style={styles.infoRow}>
@@ -220,39 +221,23 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     margin: 16,
   },
-  creatorSection: {
-    marginVertical: 16,
-    padding: 12,
-    borderRadius: 8,
-    backgroundColor: 'rgba(0,0,0,0.05)',
-  },
-  creatorHeader: {
+  creatorContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    padding: 12,
+    backgroundColor: 'rgba(0,0,0,0.05)',
+    borderRadius: 8,
+    marginVertical: 16,
   },
   creatorImage: {
     width: 40,
     height: 40,
     borderRadius: 20,
-  },
-  creatorImagePlaceholder: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  creatorInfo: {
-    marginLeft: 12,
-    flex: 1,
+    marginRight: 12,
   },
   creatorName: {
     fontSize: 16,
     fontWeight: 'bold',
-  },
-  creatorBio: {
-    fontSize: 14,
-    opacity: 0.7,
-    marginTop: 2,
+    fontFamily: 'Roboto',
   },
 });

@@ -15,6 +15,7 @@ export default function TabLayout() {
   // Get user profile image
   useEffect(() => {
     if (auth.currentUser?.photoURL) {
+      console.log("setting profile image", auth.currentUser.photoURL);
       setProfileImage(auth.currentUser.photoURL);
     }
   }, []);
@@ -116,7 +117,8 @@ export default function TabLayout() {
       <Tabs.Screen
         name="settings"
         options={{
-          href: null
+          href: null,
+          headerShown: false,
         }}
       />
     </Tabs>

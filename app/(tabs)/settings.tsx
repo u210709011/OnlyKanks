@@ -52,9 +52,8 @@ const SettingsScreen = () => {
 
   const accountSettings: SettingItem[] = [
     {
-      icon: 'person-circle-outline',
-      title: 'Profile Settings',
-      subtitle: 'Edit your profile information',
+      icon: 'person-outline',
+      title: 'Edit Profile',
       onPress: () => router.push('/profile/edit'),
     },
     {
