@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, Image, StyleSheet, TouchableOpacity, Dimensions, ViewStyle, StyleProp, Pressable } from 'react-native';
+import { View, Text, Image, StyleSheet, TouchableOpacity, Dimensions, ViewStyle, StyleProp, Pressable, Alert } from 'react-native';
 import { useTheme } from '../../context/theme.context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { format } from 'date-fns';
 import { useRouter } from 'expo-router';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, arrayUnion, addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { useAuth } from '../../context/auth.context';
-import { Event } from '../../services/events.service';
+import { Event, Participant, ParticipantType, AttendeeStatus } from '../../services/events.service';
 import { UserService } from '../../services/user.service';
 import { BlurView } from 'expo-blur';
 
@@ -23,17 +23,23 @@ export const EventCard: React.FC<EventCardProps> = ({ event, onPress }) => {
   const { user } = useAuth();
   const [creator, setCreator] = useState<any>(null);
   const [isPressed, setIsPressed] = useState(false);
+  const [isJoinRequested, setIsJoinRequested] = useState(false);
+  const [isJoining, setIsJoining] = useState(false);
 
   useEffect(() => {
     const fetchCreator = async () => {
       try {
         if (event.createdBy) {
           const creatorData = await UserService.getUser(event.createdBy);
-          setCreator(creatorData || {
-            id: event.createdBy,
-            displayName: 'Unknown User',
-            photoURL: null
-          });
+          if (creatorData) {
+            setCreator(creatorData);
+          } else {
+            setCreator({
+              id: event.createdBy,
+              displayName: 'Unknown User',
+              photoURL: null
+            });
+          }
         }
       } catch (error) {
         console.error('Error fetching creator data:', error);
@@ -44,8 +50,21 @@ export const EventCard: React.FC<EventCardProps> = ({ event, onPress }) => {
         });
       }
     };
-    fetchCreator();
-  }, [event.createdBy]);
+    
+    if (event.createdBy) {
+      fetchCreator();
+    }
+
+    // Check if user has already requested to join this event
+    if (user && event.participants) {
+      const userParticipant = event.participants.find(
+        p => p.id === user.id && p.type === ParticipantType.USER
+      );
+      if (userParticipant) {
+        setIsJoinRequested(true);
+      }
+    }
+  }, [event.createdBy, event.participants, user]);
 
   const handlePress = () => {
     if (onPress) {
@@ -63,9 +82,54 @@ export const EventCard: React.FC<EventCardProps> = ({ event, onPress }) => {
       .toUpperCase();
   };
 
+  const requestToJoin = async () => {
+    if (!user) {
+      Alert.alert("Sign In Required", "Please sign in to join events");
+      return;
+    }
+
+    if (event.createdBy === user.id) {
+      Alert.alert("Notice", "You're the creator of this event");
+      return;
+    }
+
+    try {
+      setIsJoining(true);
+      
+      const newParticipant: Participant = {
+        id: user.id,
+        name: user.displayName || 'Anonymous User',
+        photoURL: user.photoURL || null,
+        type: ParticipantType.USER,
+        status: AttendeeStatus.PENDING
+      };
+
+      // Update the event document directly with the new participant
+      const eventRef = doc(db, 'events', event.id);
+      await updateDoc(eventRef, {
+        participants: arrayUnion(newParticipant)
+      });
+
+      setIsJoinRequested(true);
+      Alert.alert("Success", "Request to join sent successfully");
+    } catch (error) {
+      console.error('Error requesting to join event:', error);
+      Alert.alert("Error", "Failed to send join request");
+    } finally {
+      setIsJoining(false);
+    }
+  };
+
   const eventDate = event.date.toDate();
   const formattedDate = format(eventDate, 'EEE, MMM d');
   const formattedTime = format(eventDate, 'h:mm a');
+
+  // Calculate total attendees and available spots
+  const totalAccepted = event.participants 
+    ? event.participants.filter(p => p.status === AttendeeStatus.ACCEPTED || p.type === ParticipantType.NON_USER || p.id === event.createdBy).length 
+    : 0;
+  
+  const availableSpots = (event.capacity || 0) - totalAccepted;
 
   return (
     <Pressable
@@ -142,20 +206,60 @@ export const EventCard: React.FC<EventCardProps> = ({ event, onPress }) => {
             style={styles.creatorContainer}
             onPress={() => creator?.id && router.push(`/profile/${creator.id}`)}
           >
-            <Image 
-              source={creator?.photoURL ? { uri: creator.photoURL } : require('../../assets/default-avatar.png')} 
-              style={styles.creatorImage} 
-            />
+            {creator?.photoURL ? (
+              <Image 
+                source={{ uri: creator.photoURL }} 
+                style={styles.creatorImage} 
+              />
+            ) : (
+              <View style={[styles.creatorInitials, { backgroundColor: theme.primary + '20' }]}>
+                <Text style={{ color: theme.primary, fontWeight: 'bold' }}>
+                  {creator?.displayName ? getInitials(creator.displayName) : '?'}
+                </Text>
+              </View>
+            )}
             <Text style={[styles.creatorName, { color: theme.text }]}>
               {creator?.displayName || 'Unknown User'}
             </Text>
           </TouchableOpacity>
           
-          <View style={[styles.attendeeChip, { backgroundColor: theme.primary + '20' }]}>
-            <Ionicons name="people-outline" size={14} color={theme.primary} style={{ marginRight: 4 }} />
-            <Text style={[styles.attendeeText, { color: theme.primary }]}>
-              {Math.floor(Math.random() * 20) + 1} attending
-            </Text>
+          <View style={styles.eventInfoContainer}>
+            <View style={[styles.attendeeChip, { backgroundColor: theme.primary + '20' }]}>
+              <Ionicons name="people-outline" size={14} color={theme.primary} style={{ marginRight: 4 }} />
+              <Text style={[styles.attendeeText, { color: theme.primary }]}>
+                {totalAccepted} attending
+              </Text>
+            </View>
+            
+            {user && user.id !== event.createdBy && (
+              <TouchableOpacity 
+                style={[
+                  styles.joinButton, 
+                  { 
+                    backgroundColor: isJoinRequested 
+                      ? theme.primary + '30' 
+                      : theme.primary 
+                  }
+                ]}
+                onPress={requestToJoin}
+                disabled={isJoinRequested || isJoining}
+              >
+                <Text style={[
+                  styles.joinButtonText, 
+                  { 
+                    color: isJoinRequested ? theme.primary : 'white'
+                  }
+                ]}>
+                  {isJoining ? 'Sending...' : (isJoinRequested ? 'Requested' : 'Join')}
+                </Text>
+              </TouchableOpacity>
+            )}
+            
+            {availableSpots > 0 && (
+              <Text style={[styles.availableSpots, { color: theme.text + '80' }]}>
+                {availableSpots} spot{availableSpots !== 1 ? 's' : ''} left
+              </Text>
+            )}
           </View>
         </View>
       </View>
@@ -248,63 +352,73 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   metaText: {
-    marginLeft: 4,
     fontSize: 14,
+    marginLeft: 4,
     fontFamily: 'Roboto',
   },
   description: {
-    fontSize: 15,
-    marginBottom: 20,
-    lineHeight: 22,
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 16,
     fontFamily: 'Roboto',
   },
   footer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(0,0,0,0.05)',
   },
   creatorContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    flex: 1,
   },
   creatorImage: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     marginRight: 8,
   },
   creatorInitials: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     justifyContent: 'center',
+    alignItems: 'center',
     marginRight: 8,
-  },
-  initialsText: {
-    fontSize: 14,
-    color: '#fff',
-    fontWeight: 'bold',
   },
   creatorName: {
     fontSize: 14,
     fontWeight: '500',
     fontFamily: 'Roboto',
   },
+  eventInfoContainer: {
+    alignItems: 'flex-end',
+  },
   attendeeChip: {
     flexDirection: 'row',
     alignItems: 'center',
+    padding: 6,
     paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 16,
+    borderRadius: 14,
+    marginBottom: 6,
   },
   attendeeText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
+    fontFamily: 'Roboto',
+  },
+  joinButton: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    marginBottom: 6,
+  },
+  joinButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    fontFamily: 'Roboto',
+  },
+  availableSpots: {
+    fontSize: 12,
     fontFamily: 'Roboto',
   },
 }); 

@@ -1,9 +1,30 @@
 import { FirebaseService, collections } from './firebase.service';
 import { auth } from '../config/firebase';
-import { collection, query, where, getDocs, GeoPoint, orderBy, Timestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, GeoPoint, orderBy, Timestamp, serverTimestamp } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import uuid from 'react-native-uuid';
 import { startOfDay, endOfDay, isAfter, isBefore, isEqual } from 'date-fns';
+
+export enum ParticipantType {
+  USER = 'user',
+  NON_USER = 'non-user'
+}
+
+export enum AttendeeStatus {
+  PENDING = 'pending',
+  ACCEPTED = 'accepted',
+  REJECTED = 'rejected',
+  INVITED = 'invited'
+}
+
+export interface Participant {
+  id: string;
+  name: string;
+  photoURL?: string | null;
+  type: ParticipantType;
+  status?: AttendeeStatus;
+  requestId?: string; // ID of the join request document
+}
 
 export interface Event {
   id: string;
@@ -19,6 +40,9 @@ export interface Event {
   createdBy: string;
   createdAt: any;
   updatedAt: any;
+  uploadDate?: any; // When the event was uploaded
+  capacity?: number; // Maximum number of participants
+  participants?: Participant[]; // List of participants (both users and non-users)
 }
 
 export interface EventFilterOptions {

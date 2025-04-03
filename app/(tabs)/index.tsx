@@ -98,6 +98,13 @@ export default function ExploreScreen() {
       // Only group by date if sorting by date
       if (filters.sortBy === 'date-asc' || filters.sortBy === 'date-desc') {
         const grouped = EventsService.groupEventsByDate(sortedEvents);
+        
+        // For 'date-desc', we need to reverse the grouped array
+        // since groupEventsByDate always sorts in ascending order
+        if (filters.sortBy === 'date-desc') {
+          grouped.reverse();
+        }
+        
         setGroupedEvents(grouped);
       } else {
         // For distance sorting, put all events in a single "section"
@@ -200,6 +207,7 @@ export default function ExploreScreen() {
         onFilterChange={handleFilterChange} 
         isLoading={filterLoading}
         events={events}
+        onEventPress={(eventId) => router.push(`/event/${eventId}`)}
       />
       
       {events.length === 0 && !loading ? (

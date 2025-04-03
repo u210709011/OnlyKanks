@@ -78,7 +78,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         router.replace('/(tabs)');
       }
     }
-  }, [user, isLoading]);
+  }, [user, isLoading, rootSegment, router]);
 
   return (
     <AuthContext.Provider value={{ user, isLoading }}>

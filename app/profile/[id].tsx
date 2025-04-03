@@ -1,16 +1,24 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, Pressable, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, Pressable, ActivityIndicator, FlatList, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/theme.context';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { auth, db } from '../../config/firebase';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
 import { Event } from '../../services/events.service';
 import { MessagesService } from '../../services/messages.service';
 import { FriendsService, FriendRequestStatus } from '../../services/friends.service';
 import { User, UserService } from '../../services/user.service';
 import { CustomButton } from '../../components/shared/CustomButton';
+import { EventCard } from '../../components/events/EventCard';
+
+const { width } = Dimensions.get('window');
+const GRID_SPACING = 2;
+const NUM_COLUMNS = 3;
+const ITEM_WIDTH = (width - (NUM_COLUMNS - 1) * GRID_SPACING - 32) / NUM_COLUMNS;
+
+type ViewMode = 'grid' | 'list';
 
 export default function UserProfileScreen() {
   const { theme } = useTheme();
@@ -28,6 +36,7 @@ export default function UserProfileScreen() {
   const [friendRequestId, setFriendRequestId] = useState<string | undefined>(undefined);
   const [friendActionLoading, setFriendActionLoading] = useState(false);
   const [user, setUser] = useState<User | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>('grid');
   
   const userId = id as string;
 
@@ -199,161 +208,353 @@ export default function UserProfileScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <ScrollView
-        contentContainerStyle={{ 
-          paddingTop: insets.top,
-          paddingBottom: insets.bottom + 20
-        }}
+      <Pressable
+        style={[styles.backButton, { backgroundColor: theme.card + '80' }]}
+        onPress={() => router.back()}
       >
-        {/* Profile section */}
-        <View style={styles.profileSection}>
-          {/* Back button at the top */}
-          <TouchableOpacity 
-            style={styles.backButton}
-            onPress={() => router.back()}
-          >
-            <Ionicons name="arrow-back" size={24} color={theme.text} />
-          </TouchableOpacity>
-
-          <View style={styles.profileHeader}>
-            <Image 
-              source={profileImage ? { uri: profileImage } : require('../../assets/default-avatar.png')} 
-              style={styles.profileImage}
-            />
-            
-            <View style={styles.statsContainer}>
-              <View style={styles.statItem}>
-                <Text style={[styles.statNumber, { color: theme.text }]}>{userEvents.length}</Text>
-                <Text style={[styles.statLabel, { color: theme.text + '80' }]}>Events</Text>
-              </View>
-              
-              <View style={styles.statItem}>
-                <Text style={[styles.statNumber, { color: theme.text }]}>142</Text>
-                <Text style={[styles.statLabel, { color: theme.text + '80' }]}>Friends</Text>
-              </View>
-              
-              <View style={styles.statItem}>
-                <Text style={[styles.statNumber, { color: theme.text }]}>38</Text>
-                <Text style={[styles.statLabel, { color: theme.text + '80' }]}>Attending</Text>
-              </View>
-            </View>
-          </View>
-          
-          <Text style={[styles.displayName, { color: theme.text }]}>{displayName}</Text>
-          
-          <Text style={[styles.bio, { color: theme.text }]}>
-            {userBio || 'No bio yet.'}
-          </Text>
-          
-          <View style={styles.actionButtons}>
-            {/* Friend Request Buttons based on status */}
-            {friendshipStatus === 'none' && (
-              <CustomButton
-                title="Add Friend"
-                onPress={handleSendFriendRequest}
-                loading={friendActionLoading}
-                style={styles.actionButton}
-              />
-            )}
-            
-            {friendshipStatus === 'sent' && (
-              <CustomButton
-                title="Cancel Request"
-                onPress={handleCancelFriendRequest}
-                loading={friendActionLoading}
-                style={styles.actionButton}
-                secondary
-              />
-            )}
-            
-            {friendshipStatus === 'received' && (
-              <View style={styles.rowButtons}>
-                <CustomButton
-                  title="Accept"
-                  onPress={handleAcceptFriendRequest}
-                  loading={friendActionLoading}
-                  style={[styles.actionButton, styles.halfButton]}
-                />
-                <CustomButton
-                  title="Decline"
-                  onPress={handleRejectFriendRequest}
-                  loading={friendActionLoading}
-                  style={[styles.actionButton, styles.halfButton]}
-                  secondary
-                />
-              </View>
-            )}
-            
-            {friendshipStatus === 'friends' && (
-              <CustomButton
-                title="Friends"
-                onPress={handleRemoveFriend}
-                loading={friendActionLoading}
-                style={styles.actionButton}
-                secondary
-              />
-            )}
-            
-            {/* Message button */}
+        <Ionicons name="arrow-back" size={24} color={theme.text} />
+      </Pressable>
+      
+      {viewMode === 'grid' ? (
+        <FlatList
+          key={`grid-${viewMode}`}
+          data={[...userEvents].sort((a, b) => {
+            const dateA = a.date.toDate ? a.date.toDate() : new Date(a.date);
+            const dateB = b.date.toDate ? b.date.toDate() : new Date(b.date);
+            return dateB.getTime() - dateA.getTime(); // Newest first
+          })}
+          renderItem={({ item }) => (
             <TouchableOpacity
-              style={[styles.messageButton, { backgroundColor: theme.primary + '20' }]}
-              onPress={handleMessage}
+              style={[styles.gridItem, { width: ITEM_WIDTH }]}
+              onPress={() => router.push(`/event/${item.id}`)}
             >
-              <Ionicons name="chatbubble-outline" size={18} color={theme.primary} />
-              <Text style={[styles.messageButtonText, { color: theme.primary }]}>Message</Text>
+              <Image
+                source={{ uri: item.imageUrl || 'https://via.placeholder.com/150' }}
+                style={styles.gridItemImage}
+              />
             </TouchableOpacity>
-          </View>
-        </View>
-        
-        {/* Tabs for Events */}
-        <View style={[styles.tabsContainer, { borderBottomColor: theme.border }]}>
-          <TouchableOpacity style={[styles.tabButton, styles.activeTab]}>
-            <Ionicons name="calendar" size={24} color={theme.primary} />
-          </TouchableOpacity>
-        </View>
-        
-        {/* Events Grid/List */}
-        <View style={styles.eventsContainer}>
-          {userEvents.length === 0 ? (
-            <View style={styles.emptyEventsContainer}>
-              <View style={[styles.emptyIconContainer, { backgroundColor: theme.card }]}>
-                <Ionicons name="calendar-outline" size={32} color={theme.primary} />
-              </View>
-              <Text style={[styles.emptyEventsText, { color: theme.text }]}>No events yet</Text>
-              <Text style={[styles.emptyEventsSubtext, { color: theme.text + '80' }]}>
-                This user has not created any events yet
-              </Text>
-            </View>
-          ) : (
-            <View style={styles.eventsGrid}>
-              {userEvents.map(event => (
-                <Pressable 
-                  key={event.id} 
-                  style={styles.eventItem}
-                  onPress={() => router.push(`/event/${event.id}`)}
-                >
-                  {event.imageUrl ? (
+          )}
+          keyExtractor={(item) => item.id}
+          numColumns={NUM_COLUMNS}
+          columnWrapperStyle={styles.gridRow}
+          contentContainerStyle={{ 
+            paddingTop: insets.top + 60,
+            paddingBottom: insets.bottom + 20,
+            paddingHorizontal: 16
+          }}
+          ListHeaderComponent={() => (
+            <>
+              <View style={styles.profileSection}>
+                <View style={styles.profileHeader}>
+                  {profileImage ? (
                     <Image 
-                      source={{ uri: event.imageUrl }} 
-                      style={styles.eventImage}
+                      source={{ uri: profileImage }} 
+                      style={styles.profileImage} 
                     />
                   ) : (
-                    <View style={[styles.eventImagePlaceholder, { backgroundColor: theme.card }]}>
-                      <Ionicons name="calendar-outline" size={32} color={theme.primary} />
+                    <View style={[styles.profileImagePlaceholder, { backgroundColor: theme.card }]}>
+                      <Text style={[styles.profileImageText, { color: theme.primary }]}>
+                        {displayName.charAt(0).toUpperCase()}
+                      </Text>
                     </View>
                   )}
-                  <Text 
-                    style={[styles.eventTitle, { color: theme.text }]} 
-                    numberOfLines={1}
+                  
+                  <View style={styles.statsContainer}>
+                    <View style={styles.statItem}>
+                      <Text style={[styles.statNumber, { color: theme.text }]}>{userEvents.length}</Text>
+                      <Text style={[styles.statLabel, { color: theme.text + '80' }]}>Events</Text>
+                    </View>
+                    
+                    <View style={styles.statItem}>
+                      <Text style={[styles.statNumber, { color: theme.text }]}>0</Text>
+                      <Text style={[styles.statLabel, { color: theme.text + '80' }]}>Friends</Text>
+                    </View>
+                  </View>
+                </View>
+                
+                <Text style={[styles.displayName, { color: theme.text }]}>{displayName}</Text>
+                
+                {userBio ? (
+                  <Text style={[styles.bio, { color: theme.text + 'DD' }]}>{userBio}</Text>
+                ) : (
+                  <Text style={[styles.bio, { color: theme.text + '80' }]}>No bio yet</Text>
+                )}
+                
+                <View style={styles.actionButtons}>
+                  {friendshipStatus === 'none' && (
+                    <CustomButton 
+                      title="Add Friend" 
+                      onPress={handleSendFriendRequest}
+                      loading={friendActionLoading}
+                      style={styles.actionButton}
+                    />
+                  )}
+                  
+                  {friendshipStatus === 'sent' && (
+                    <CustomButton 
+                      title="Cancel Friend Request" 
+                      onPress={handleCancelFriendRequest}
+                      secondary
+                      loading={friendActionLoading}
+                      style={styles.actionButton}
+                    />
+                  )}
+                  
+                  {friendshipStatus === 'received' && (
+                    <View style={styles.rowButtons}>
+                      <CustomButton 
+                        title="Accept" 
+                        onPress={handleAcceptFriendRequest}
+                        loading={friendActionLoading}
+                        style={styles.halfButton}
+                      />
+                      <CustomButton 
+                        title="Decline" 
+                        onPress={handleRejectFriendRequest}
+                        secondary
+                        loading={friendActionLoading}
+                        style={styles.halfButton}
+                      />
+                    </View>
+                  )}
+                  
+                  {friendshipStatus === 'friends' && (
+                    <CustomButton 
+                      title="Remove Friend" 
+                      onPress={handleRemoveFriend}
+                      secondary
+                      loading={friendActionLoading}
+                      style={styles.actionButton}
+                    />
+                  )}
+                  
+                  <TouchableOpacity 
+                    style={[styles.messageButton, { borderColor: theme.primary, borderWidth: 1 }]}
+                    onPress={handleMessage}
                   >
-                    {event.title}
+                    <Ionicons name="chatbubble-outline" size={18} color={theme.primary} />
+                    <Text style={[styles.messageButtonText, { color: theme.primary }]}>Message</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+              
+              <View style={styles.eventsSection}>
+                <View style={styles.sectionHeader}>
+                  <Text style={[styles.sectionTitle, { color: theme.text }]}>
+                    Events
                   </Text>
-                </Pressable>
-              ))}
-            </View>
+                  
+                  <View style={[styles.viewToggle, { backgroundColor: theme.card }]}>
+                    <TouchableOpacity
+                      style={[
+                        styles.toggleButton,
+                        viewMode === ('grid' as ViewMode) && { backgroundColor: theme.primary }
+                      ]}
+                      onPress={() => setViewMode('grid')}
+                    >
+                      <Ionicons 
+                        name="grid" 
+                        size={18} 
+                        color={viewMode === ('grid' as ViewMode) ? 'white' : theme.text}
+                      />
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity
+                      style={[
+                        styles.toggleButton,
+                        viewMode === ('list' as ViewMode) && { backgroundColor: theme.primary }
+                      ]}
+                      onPress={() => setViewMode('list')}
+                    >
+                      <Ionicons 
+                        name="list" 
+                        size={18} 
+                        color={viewMode === ('list' as ViewMode) ? 'white' : theme.text}
+                      />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+                
+                {userEvents.length === 0 && (
+                  <View style={styles.emptyEventsContainer}>
+                    <Text style={[styles.emptyEventsText, { color: theme.text + '80' }]}>
+                      No events yet
+                    </Text>
+                  </View>
+                )}
+              </View>
+            </>
           )}
-        </View>
-      </ScrollView>
+        />
+      ) : (
+        <FlatList
+          key={`list-${viewMode}`}
+          data={[...userEvents].sort((a, b) => {
+            const dateA = a.date.toDate ? a.date.toDate() : new Date(a.date);
+            const dateB = b.date.toDate ? b.date.toDate() : new Date(b.date);
+            return dateB.getTime() - dateA.getTime(); // Newest first
+          })}
+          renderItem={({ item }) => (
+            <EventCard event={item} />
+          )}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={{ 
+            paddingTop: insets.top + 60,
+            paddingBottom: insets.bottom + 20,
+            paddingHorizontal: 16
+          }}
+          ListHeaderComponent={() => (
+            <>
+              <View style={styles.profileSection}>
+                <View style={styles.profileHeader}>
+                  {profileImage ? (
+                    <Image 
+                      source={{ uri: profileImage }} 
+                      style={styles.profileImage} 
+                    />
+                  ) : (
+                    <View style={[styles.profileImagePlaceholder, { backgroundColor: theme.card }]}>
+                      <Text style={[styles.profileImageText, { color: theme.primary }]}>
+                        {displayName.charAt(0).toUpperCase()}
+                      </Text>
+                    </View>
+                  )}
+                  
+                  <View style={styles.statsContainer}>
+                    <View style={styles.statItem}>
+                      <Text style={[styles.statNumber, { color: theme.text }]}>{userEvents.length}</Text>
+                      <Text style={[styles.statLabel, { color: theme.text + '80' }]}>Events</Text>
+                    </View>
+                    
+                    <View style={styles.statItem}>
+                      <Text style={[styles.statNumber, { color: theme.text }]}>0</Text>
+                      <Text style={[styles.statLabel, { color: theme.text + '80' }]}>Friends</Text>
+                    </View>
+                  </View>
+                </View>
+                
+                <Text style={[styles.displayName, { color: theme.text }]}>{displayName}</Text>
+                
+                {userBio ? (
+                  <Text style={[styles.bio, { color: theme.text + 'DD' }]}>{userBio}</Text>
+                ) : (
+                  <Text style={[styles.bio, { color: theme.text + '80' }]}>No bio yet</Text>
+                )}
+                
+                <View style={styles.actionButtons}>
+                  {friendshipStatus === 'none' && (
+                    <CustomButton 
+                      title="Add Friend" 
+                      onPress={handleSendFriendRequest}
+                      loading={friendActionLoading}
+                      style={styles.actionButton}
+                    />
+                  )}
+                  
+                  {friendshipStatus === 'sent' && (
+                    <CustomButton 
+                      title="Cancel Friend Request" 
+                      onPress={handleCancelFriendRequest}
+                      secondary
+                      loading={friendActionLoading}
+                      style={styles.actionButton}
+                    />
+                  )}
+                  
+                  {friendshipStatus === 'received' && (
+                    <View style={styles.rowButtons}>
+                      <CustomButton 
+                        title="Accept" 
+                        onPress={handleAcceptFriendRequest}
+                        loading={friendActionLoading}
+                        style={styles.halfButton}
+                      />
+                      <CustomButton 
+                        title="Decline" 
+                        onPress={handleRejectFriendRequest}
+                        secondary
+                        loading={friendActionLoading}
+                        style={styles.halfButton}
+                      />
+                    </View>
+                  )}
+                  
+                  {friendshipStatus === 'friends' && (
+                    <CustomButton 
+                      title="Remove Friend" 
+                      onPress={handleRemoveFriend}
+                      secondary
+                      loading={friendActionLoading}
+                      style={styles.actionButton}
+                    />
+                  )}
+                  
+                  <TouchableOpacity 
+                    style={[styles.messageButton, { borderColor: theme.primary, borderWidth: 1 }]}
+                    onPress={handleMessage}
+                  >
+                    <Ionicons name="chatbubble-outline" size={18} color={theme.primary} />
+                    <Text style={[styles.messageButtonText, { color: theme.primary }]}>Message</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+              
+              <View style={styles.eventsSection}>
+                <View style={styles.sectionHeader}>
+                  <Text style={[styles.sectionTitle, { color: theme.text }]}>
+                    Events
+                  </Text>
+                  
+                  <View style={[styles.viewToggle, { backgroundColor: theme.card }]}>
+                    <TouchableOpacity
+                      style={[
+                        styles.toggleButton,
+                        viewMode === ('grid' as ViewMode) && { backgroundColor: theme.primary }
+                      ]}
+                      onPress={() => setViewMode('grid')}
+                    >
+                      <Ionicons 
+                        name="grid" 
+                        size={18} 
+                        color={viewMode === ('grid' as ViewMode) ? 'white' : theme.text}
+                      />
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity
+                      style={[
+                        styles.toggleButton,
+                        viewMode === ('list' as ViewMode) && { backgroundColor: theme.primary }
+                      ]}
+                      onPress={() => setViewMode('list')}
+                    >
+                      <Ionicons 
+                        name="list" 
+                        size={18} 
+                        color={viewMode === ('list' as ViewMode) ? 'white' : theme.text}
+                      />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+                
+                {userEvents.length === 0 && (
+                  <View style={styles.emptyEventsContainer}>
+                    <Text style={[styles.emptyEventsText, { color: theme.text + '80' }]}>
+                      No events yet
+                    </Text>
+                  </View>
+                )}
+              </View>
+            </>
+          )}
+          ListEmptyComponent={
+            <View style={styles.emptyEventsContainer}>
+              <Text style={[styles.emptyEventsText, { color: theme.text + '80' }]}>
+                No events yet
+              </Text>
+            </View>
+          }
+        />
+      )}
     </View>
   );
 }
@@ -362,8 +563,20 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'absolute',
+    top: 16,
+    left: 16,
+    zIndex: 10,
+  },
   profileSection: {
     padding: 16,
+    paddingTop: 60, // Space for the back button
   },
   profileHeader: {
     flexDirection: 'row',
@@ -375,6 +588,25 @@ const styles = StyleSheet.create({
     height: 80,
     borderRadius: 40,
     marginRight: 24,
+  },
+  profileImagePlaceholder: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    marginRight: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  profileImageText: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    fontFamily: 'Roboto',
+  },
+  displayName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 8,
+    fontFamily: 'Roboto',
   },
   statsContainer: {
     flex: 1,
@@ -426,93 +658,59 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     fontFamily: 'Roboto',
   },
-  tabsContainer: {
+  eventsSection: {
+    marginTop: 24,
+  },
+  sectionHeader: {
     flexDirection: 'row',
-    marginTop: 16,
-    borderBottomWidth: 1,
-  },
-  tabButton: {
-    flex: 1,
+    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingHorizontal: 16,
+    marginBottom: 12,
   },
-  activeTab: {
-    borderBottomWidth: 2,
-    borderBottomColor: '#5C6BC0',
-  },
-  eventsContainer: {
-    padding: 16,
-  },
-  emptyEventsContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 32,
-  },
-  emptyIconContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-  },
-  emptyEventsText: {
+  sectionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    marginBottom: 8,
-    fontFamily: 'Roboto',
   },
-  emptyEventsSubtext: {
-    fontSize: 14,
-    textAlign: 'center',
-    marginBottom: 24,
-    paddingHorizontal: 32,
-    fontFamily: 'Roboto',
-  },
-  eventsGrid: {
+  viewToggle: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-  },
-  eventItem: {
-    width: '48%',
-    marginBottom: 16,
-    borderRadius: 12,
+    borderRadius: 20,
     overflow: 'hidden',
   },
-  eventImage: {
-    width: '100%',
-    height: 120,
-  },
-  eventImagePlaceholder: {
-    width: '100%',
-    height: 120,
-    justifyContent: 'center',
+  toggleButton: {
+    padding: 8,
+    width: 36,
     alignItems: 'center',
   },
-  eventTitle: {
-    fontSize: 14,
-    fontWeight: '500',
-    padding: 8,
-    fontFamily: 'Roboto',
+  gridContainer: {
+    paddingHorizontal: 16,
+  },
+  gridRow: {
+    justifyContent: 'space-between',
+    marginBottom: GRID_SPACING,
+  },
+  gridItem: {
+    aspectRatio: 1,
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  gridItemImage: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  emptyEventsContainer: {
+    marginTop: 24,
+    padding: 16,
+    alignItems: 'center',
+  },
+  emptyEventsText: {
+    textAlign: 'center',
+    fontStyle: 'italic',
   },
   errorText: {
     fontSize: 16,
     textAlign: 'center',
-    padding: 20,
-    fontFamily: 'Roboto',
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  displayName: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 8,
     fontFamily: 'Roboto',
   },
 }); 
