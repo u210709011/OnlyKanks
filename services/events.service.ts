@@ -1,6 +1,6 @@
 import { FirebaseService, collections } from './firebase.service';
 import { auth } from '../config/firebase';
-import { collection, query, where, getDocs, GeoPoint, orderBy, Timestamp, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, GeoPoint, orderBy, Timestamp, serverTimestamp, addDoc, deleteDoc, doc, updateDoc, getDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import uuid from 'react-native-uuid';
 import { startOfDay, endOfDay, isAfter, isBefore, isEqual } from 'date-fns';
@@ -54,6 +54,18 @@ export interface EventFilterOptions {
     startDate: Date | null;
     endDate: Date | null;
   };
+}
+
+export interface EventInvitation {
+  id?: string;
+  eventId: string;
+  eventTitle: string;
+  eventImageUrl?: string;
+  senderId: string;
+  senderName: string;
+  recipientId: string;
+  status: 'pending' | 'accepted' | 'declined';
+  createdAt: any;
 }
 
 export class EventsService {
@@ -247,5 +259,122 @@ export class EventsService {
   
   private static deg2rad(deg: number): number {
     return deg * (Math.PI/180);
+  }
+
+  static async inviteUserToEvent(eventId: string, userId: string): Promise<string> {
+    if (!auth.currentUser) throw new Error('User not authenticated');
+
+    try {
+      // Get the event data
+      const eventDoc = await getDoc(doc(db, collections.EVENTS, eventId));
+      if (!eventDoc.exists()) {
+        throw new Error('Event not found');
+      }
+      
+      const eventData = eventDoc.data() as Event;
+      
+      // Check if the current user is the event creator
+      if (eventData.createdBy !== auth.currentUser.uid) {
+        throw new Error('Only the event creator can invite users');
+      }
+      
+      // Check if user is already invited by checking participants list
+      const participants = eventData.participants || [];
+      if (participants.some(p => p.id === userId)) {
+        throw new Error('User is already a participant');
+      }
+      
+      // Create a pending participant instead of a separate invitation
+      const newParticipant: Participant = {
+        id: userId,
+        name: 'Invited User', // This will be updated when they accept
+        photoURL: null,
+        type: ParticipantType.USER,
+        status: AttendeeStatus.INVITED
+      };
+      
+      // Update the event with the new invited participant
+      await updateDoc(doc(db, collections.EVENTS, eventId), {
+        participants: [...participants, newParticipant]
+      });
+      
+      return eventId; // Return the event ID instead of invitation ID
+    } catch (error) {
+      console.error('Error inviting user to event:', error);
+      throw error;
+    }
+  }
+  
+  static async getUserInvitations(): Promise<EventInvitation[]> {
+    if (!auth.currentUser) throw new Error('User not authenticated');
+    
+    try {
+      const invitationsQuery = query(
+        collection(db, collections.INVITATIONS),
+        where('recipientId', '==', auth.currentUser.uid),
+        where('status', '==', 'pending')
+      );
+      
+      const snapshot = await getDocs(invitationsQuery);
+      return snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as EventInvitation));
+    } catch (error) {
+      console.error('Error fetching user invitations:', error);
+      throw error;
+    }
+  }
+  
+  static async respondToInvitation(invitationId: string, accept: boolean): Promise<void> {
+    if (!auth.currentUser) throw new Error('User not authenticated');
+    
+    try {
+      // Get the invitation
+      const invitationDoc = await getDoc(doc(db, collections.INVITATIONS, invitationId));
+      if (!invitationDoc.exists()) {
+        throw new Error('Invitation not found');
+      }
+      
+      const invitation = invitationDoc.data() as EventInvitation;
+      
+      // Update invitation status
+      await updateDoc(doc(db, collections.INVITATIONS, invitationId), {
+        status: accept ? 'accepted' : 'declined'
+      });
+      
+      // If accepted, add user to event participants
+      if (accept) {
+        const eventDoc = await getDoc(doc(db, collections.EVENTS, invitation.eventId));
+        if (!eventDoc.exists()) {
+          throw new Error('Event not found');
+        }
+        
+        const eventData = eventDoc.data() as Event;
+        const participants = eventData.participants || [];
+        
+        // Get user profile info
+        const userDoc = await getDoc(doc(db, collections.USERS, auth.currentUser.uid));
+        const userData = userDoc.exists() ? userDoc.data() : null;
+        
+        // Only add if not already a participant
+        if (!participants.some(p => p.id === auth.currentUser?.uid)) {
+          const newParticipant: Participant = {
+            id: auth.currentUser?.uid || '',
+            name: userData?.displayName || auth.currentUser?.displayName || 'User',
+            photoURL: userData?.photoURL || auth.currentUser?.photoURL || null,
+            type: ParticipantType.USER,
+            status: AttendeeStatus.ACCEPTED
+          };
+          
+          await updateDoc(doc(db, collections.EVENTS, invitation.eventId), {
+            participants: [...participants, newParticipant]
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error responding to invitation:', error);
+      throw error;
+    }
   }
 } 

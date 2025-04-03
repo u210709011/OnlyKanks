@@ -61,6 +61,12 @@ const SettingsScreen = () => {
       title: 'Friends',
       subtitle: 'Manage your friends and requests',
       onPress: () => router.push('/friends'),
+    },
+    {
+      icon: 'mail-outline',
+      title: 'Event Invitations',
+      subtitle: 'Manage event invitations',
+      onPress: () => router.push('/settings/invitations'),
     }
   ];
 

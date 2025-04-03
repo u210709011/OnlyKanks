@@ -117,8 +117,8 @@ export default function UserProfileScreen() {
   const handleSendFriendRequest = async () => {
     if (!auth.currentUser) return;
     
-    setFriendActionLoading(true);
     try {
+      setFriendActionLoading(true);
       await FriendsService.sendFriendRequest(userId);
       setFriendshipStatus('sent');
     } catch (error) {
@@ -228,10 +228,16 @@ export default function UserProfileScreen() {
               style={[styles.gridItem, { width: ITEM_WIDTH }]}
               onPress={() => router.push(`/event/${item.id}`)}
             >
-              <Image
-                source={{ uri: item.imageUrl || 'https://via.placeholder.com/150' }}
-                style={styles.gridItemImage}
-              />
+              {item.imageUrl ? (
+                <Image
+                  source={{ uri: item.imageUrl }}
+                  style={styles.gridItemImage}
+                />
+              ) : (
+                <View style={[styles.gridItemPlaceholder, { backgroundColor: theme.card }]}>
+                  <Ionicons name="calendar-outline" size={24} color={theme.primary} />
+                </View>
+              )}
             </TouchableOpacity>
           )}
           keyExtractor={(item) => item.id}
@@ -338,11 +344,11 @@ export default function UserProfileScreen() {
                 </View>
               </View>
               
-              <View style={styles.eventsSection}>
-                <View style={styles.sectionHeader}>
-                  <Text style={[styles.sectionTitle, { color: theme.text }]}>
-                    Events
-                  </Text>
+              <View style={styles.profileSection}>
+                <View style={styles.tabsContainer}>
+                  <TouchableOpacity style={[styles.tabButton, styles.activeTab]}>
+                    <Ionicons name="calendar" size={24} color={theme.primary} />
+                  </TouchableOpacity>
                   
                   <View style={[styles.viewToggle, { backgroundColor: theme.card }]}>
                     <TouchableOpacity
@@ -374,14 +380,6 @@ export default function UserProfileScreen() {
                     </TouchableOpacity>
                   </View>
                 </View>
-                
-                {userEvents.length === 0 && (
-                  <View style={styles.emptyEventsContainer}>
-                    <Text style={[styles.emptyEventsText, { color: theme.text + '80' }]}>
-                      No events yet
-                    </Text>
-                  </View>
-                )}
               </View>
             </>
           )}
@@ -499,11 +497,11 @@ export default function UserProfileScreen() {
                 </View>
               </View>
               
-              <View style={styles.eventsSection}>
-                <View style={styles.sectionHeader}>
-                  <Text style={[styles.sectionTitle, { color: theme.text }]}>
-                    Events
-                  </Text>
+              <View style={styles.profileSection}>
+                <View style={styles.tabsContainer}>
+                  <TouchableOpacity style={[styles.tabButton, styles.activeTab]}>
+                    <Ionicons name="calendar" size={24} color={theme.primary} />
+                  </TouchableOpacity>
                   
                   <View style={[styles.viewToggle, { backgroundColor: theme.card }]}>
                     <TouchableOpacity
@@ -535,21 +533,17 @@ export default function UserProfileScreen() {
                     </TouchableOpacity>
                   </View>
                 </View>
-                
-                {userEvents.length === 0 && (
-                  <View style={styles.emptyEventsContainer}>
-                    <Text style={[styles.emptyEventsText, { color: theme.text + '80' }]}>
-                      No events yet
-                    </Text>
-                  </View>
-                )}
               </View>
             </>
           )}
           ListEmptyComponent={
             <View style={styles.emptyEventsContainer}>
-              <Text style={[styles.emptyEventsText, { color: theme.text + '80' }]}>
-                No events yet
+              <View style={[styles.emptyIconContainer, { backgroundColor: theme.card }]}>
+                <Ionicons name="calendar-outline" size={32} color={theme.primary} />
+              </View>
+              <Text style={[styles.emptyEventsText, { color: theme.text }]}>No events yet</Text>
+              <Text style={[styles.emptyEventsSubtext, { color: theme.text + '80' }]}>
+                This user hasn't created any events yet
               </Text>
             </View>
           }
@@ -563,20 +557,30 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+  },
+  username: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    fontFamily: 'Roboto',
+    flex: 1,
+    textAlign: 'center',
+  },
   backButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    position: 'absolute',
-    top: 16,
-    left: 16,
-    zIndex: 10,
   },
   profileSection: {
     padding: 16,
-    paddingTop: 60, // Space for the back button
   },
   profileHeader: {
     flexDirection: 'row',
@@ -658,24 +662,25 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     fontFamily: 'Roboto',
   },
-  eventsSection: {
-    marginTop: 24,
-  },
-  sectionHeader: {
+  tabsContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    marginBottom: 12,
+    marginTop: 16,
+    borderBottomWidth: 1,
   },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
+  tabButton: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  activeTab: {
+    borderBottomWidth: 2,
+    borderBottomColor: '#5C6BC0',
   },
   viewToggle: {
     flexDirection: 'row',
     borderRadius: 20,
     overflow: 'hidden',
+    marginRight: 16,
   },
   toggleButton: {
     padding: 8,
@@ -699,18 +704,43 @@ const styles = StyleSheet.create({
     height: '100%',
     resizeMode: 'cover',
   },
-  emptyEventsContainer: {
-    marginTop: 24,
-    padding: 16,
+  gridItemPlaceholder: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 8,
     alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyEventsContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 32,
+  },
+  emptyIconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
   },
   emptyEventsText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 8,
+    fontFamily: 'Roboto',
+  },
+  emptyEventsSubtext: {
+    fontSize: 14,
     textAlign: 'center',
-    fontStyle: 'italic',
+    marginBottom: 24,
+    paddingHorizontal: 32,
+    fontFamily: 'Roboto',
   },
   errorText: {
     fontSize: 16,
     textAlign: 'center',
+    padding: 20,
     fontFamily: 'Roboto',
   },
 }); 

@@ -36,6 +36,25 @@ service cloud.firestore {
         resource.data.participants.hasAny([request.auth.uid]);
     }
     
+    match /invitations/{invitationId} {
+      // Allow users to read invitations they sent or received
+      allow read: if request.auth != null &&
+        (resource.data.senderId == request.auth.uid || 
+         resource.data.recipientId == request.auth.uid);
+      
+      // Allow users to create invitations where they are the sender
+      allow create: if request.auth != null && 
+        request.resource.data.senderId == request.auth.uid;
+      
+      // Allow users to update invitations addressed to them (to accept/decline)
+      allow update: if request.auth != null && 
+        resource.data.recipientId == request.auth.uid;
+      
+      // Allow sender to delete their invitations
+      allow delete: if request.auth != null && 
+        resource.data.senderId == request.auth.uid;
+    }
+    
     match /friendRequests/{requestId} {
       // Anyone can read friend requests they sent or received
       allow read: if request.auth != null &&

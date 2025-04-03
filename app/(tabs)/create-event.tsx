@@ -17,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { ParticipantType, Participant, AttendeeStatus } from '../../services/events.service';
 import { FriendsService, Friend } from '../../services/friends.service';
 import { UserService } from '../../services/user.service';
+import { EventsService } from '../../services/events.service';
 
 // Define the schema for validation
 const schema = yup.object().shape({
@@ -64,6 +65,10 @@ export default function CreateEventScreen(): React.ReactElement {
   const [filteredFriends, setFilteredFriends] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isLoadingFriends, setIsLoadingFriends] = useState<boolean>(false);
+
+  // Track friends to invite after event creation
+  const [friendsToInvite, setFriendsToInvite] = useState<any[]>([]);
+  const [friendToInvite, setFriendToInvite] = useState<any | null>(null);
 
   // Get user's current location on component mount
   useEffect(() => {
@@ -135,15 +140,8 @@ export default function CreateEventScreen(): React.ReactElement {
   };
   
   const handleSelectFriend = (friend: any) => {
-    const newParticipant: Participant = {
-      id: friend.id,
-      name: friend.displayName || 'User',
-      photoURL: friend.photoURL,
-      type: ParticipantType.USER,
-      status: AttendeeStatus.INVITED
-    };
-    
-    setParticipants([...participants, newParticipant]);
+    // We'll invite the friend after the event is created
+    setFriendToInvite(friend);
     setShowAddModal(false);
   };
 
@@ -325,7 +323,15 @@ export default function CreateEventScreen(): React.ReactElement {
       };
 
       console.log('Event data being saved:', eventData);
-      await addDoc(collection(db, 'events'), eventData);
+      const eventRef = await addDoc(collection(db, 'events'), eventData);
+      
+      // After event is created, send invitations to all friends
+      if (friendsToInvite.length > 0) {
+        const invitePromises = friendsToInvite.map(friend => 
+          EventsService.inviteUserToEvent(eventRef.id, friend.id)
+        );
+        await Promise.all(invitePromises);
+      }
 
       // Navigate back to the profile tab
       router.push('/(tabs)/profile');
@@ -400,6 +406,56 @@ export default function CreateEventScreen(): React.ReactElement {
         </View>
       </View>
     );
+  };
+
+  // Add the friend to invite list
+  useEffect(() => {
+    if (friendToInvite) {
+      // Make sure we're not adding duplicates
+      if (!friendsToInvite.some(f => f.id === friendToInvite.id)) {
+        setFriendsToInvite([...friendsToInvite, friendToInvite]);
+      }
+      setFriendToInvite(null);
+    }
+  }, [friendToInvite]);
+
+  // Display the list of friends to be invited
+  const renderFriendToInvite = ({ item }: { item: any }) => (
+    <View style={[styles.participantItem, { backgroundColor: theme.card }]}>
+      <View style={styles.participantInfo}>
+        {item.photoURL ? (
+          <Image source={{ uri: item.photoURL }} style={styles.participantImage} />
+        ) : (
+          <View style={[styles.defaultAvatar, { backgroundColor: theme.primary + '30' }]}>
+            <Text style={{ color: theme.primary, fontWeight: 'bold' }}>
+              {item.displayName.substring(0, 2).toUpperCase()}
+            </Text>
+          </View>
+        )}
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.participantName, { color: theme.text }]}>
+            {item.displayName}
+          </Text>
+          <View style={styles.inviteBadgeContainer}>
+            <Ionicons name="mail-outline" size={14} color={theme.primary} style={{ marginRight: 4 }} />
+            <Text style={[styles.participantType, { color: theme.primary }]}>
+              Will be invited
+            </Text>
+          </View>
+        </View>
+      </View>
+      
+      <TouchableOpacity 
+        style={styles.removeButton}
+        onPress={() => handleRemoveFriendToInvite(item)}
+      >
+        <Ionicons name="trash" size={18} color={theme.error || '#FF3B30'} />
+      </TouchableOpacity>
+    </View>
+  );
+
+  const handleRemoveFriendToInvite = (friend: any) => {
+    setFriendsToInvite(friendsToInvite.filter(f => f.id !== friend.id));
   };
 
   return (
@@ -576,6 +632,36 @@ export default function CreateEventScreen(): React.ReactElement {
             <Text style={[styles.emptyParticipantsText, { color: theme.text + '60' }]}>
               No participants added yet.
             </Text>
+          )}
+
+          {/* Friends to invite section */}
+          {friendsToInvite.length > 0 && (
+            <>
+              <View style={[styles.inviteDivider, { backgroundColor: theme.border }]} />
+              
+              <View style={styles.participantsSectionHeader}>
+                <Text style={[styles.label, { color: theme.text + '80', fontFamily: 'Roboto' }]}>
+                  Friends to Invite After Event Creation ({friendsToInvite.length})
+                </Text>
+                <TouchableOpacity
+                  style={[{ padding: 8 }]}
+                  onPress={() => Alert.alert(
+                    "Event Invitations", 
+                    "These friends will receive an invitation to your event after creation. They will not be automatically added as participants."
+                  )}
+                >
+                  <Ionicons name="information-circle-outline" size={18} color={theme.text + '80'} />
+                </TouchableOpacity>
+              </View>
+              
+              <FlatList
+                data={friendsToInvite}
+                renderItem={renderFriendToInvite}
+                keyExtractor={(item) => item.id}
+                scrollEnabled={false}
+                style={styles.participantsList}
+              />
+            </>
           )}
         </View>
 
@@ -1137,5 +1223,14 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontStyle: 'italic',
     fontFamily: 'Roboto',
+  },
+  inviteDivider: {
+    height: 1,
+    marginVertical: 12,
+  },
+  inviteBadgeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
   },
 });

@@ -263,6 +263,12 @@ const styles = StyleSheet.create({
     height: '100%',
     resizeMode: 'cover',
   },
+  gridItemPlaceholder: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
 });
 
 export default function ProfileScreen() {
@@ -400,10 +406,16 @@ export default function ProfileScreen() {
               style={[styles.gridItem, { width: ITEM_WIDTH }]}
               onPress={() => router.push(`/event/${item.id}`)}
             >
-              <Image
-                source={{ uri: item.imageUrl || 'https://via.placeholder.com/150' }}
-                style={styles.gridItemImage}
-              />
+              {item.imageUrl ? (
+                <Image
+                  source={{ uri: item.imageUrl }}
+                  style={styles.gridItemImage}
+                />
+              ) : (
+                <View style={[styles.gridItemPlaceholder, { backgroundColor: theme.card }]}>
+                  <Ionicons name="calendar-outline" size={24} color={theme.primary} />
+                </View>
+              )}
             </TouchableOpacity>
           )}
           keyExtractor={(item) => item.id}

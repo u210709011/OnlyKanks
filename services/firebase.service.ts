@@ -19,6 +19,7 @@ export const collections = {
   LOCATIONS: 'locations',
   FRIEND_REQUESTS: 'friendRequests',
   FRIENDS: 'friends',
+  INVITATIONS: 'invitations',
 } as const;
 
 export class FirebaseService {
