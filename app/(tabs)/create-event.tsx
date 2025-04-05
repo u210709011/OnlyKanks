@@ -276,6 +276,37 @@ export default function CreateEventScreen(): React.ReactElement {
     }
   };
 
+  // Add a new function to reset the form
+  const resetForm = () => {
+    setTitle('');
+    setDescription('');
+    setDate(new Date());
+    setLocation('');
+    setCapacity('');
+    setImage(null);
+    setImagePreview(null);
+    setImageUrl('');
+    
+    // Reset participants to just the creator
+    if (auth.currentUser) {
+      const creatorParticipant: Participant = {
+        id: auth.currentUser.uid,
+        name: auth.currentUser.displayName || 'Event Creator',
+        photoURL: auth.currentUser.photoURL || null,
+        type: ParticipantType.USER,
+      };
+      setParticipants([creatorParticipant]);
+    } else {
+      setParticipants([]);
+    }
+    
+    // Reset friends to invite
+    setFriendsToInvite([]);
+    
+    // Reset location to current user location
+    fetchUserLocation();
+  };
+
   const handleSubmit = async (): Promise<void> => {
     try {
       if (!markerCoordinates) {
@@ -333,8 +364,16 @@ export default function CreateEventScreen(): React.ReactElement {
         await Promise.all(invitePromises);
       }
 
-      // Navigate back to the profile tab
-      router.push('/(tabs)/profile');
+      // Reset form after successful submission
+      resetForm();
+      
+      // Show success message
+      Alert.alert('Success', 'Event created successfully!', [
+        {
+          text: 'OK',
+          onPress: () => router.push('/(tabs)/profile')
+        }
+      ]);
     } catch (error) {
       console.error('Submit error:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to create event';
