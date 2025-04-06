@@ -21,7 +21,7 @@ import { EventsService } from '../../services/events.service';
 
 // Define the schema for validation
 const schema = yup.object().shape({
-  title: yup.string().required('Title is required'),
+  title: yup.string().required('Tittle is required'),
   date: yup.date().required('Date is required'),
   location: yup.string().required('Location is required'),
   description: yup.string(),
