@@ -700,7 +700,7 @@ export const EventFilters: React.FC<EventFiltersProps> = ({
               </TouchableOpacity>
               
               <CustomButton 
-                title="Apply Filters" 
+                title="Apply Filterss" 
                 onPress={applyFilters} 
                 style={styles.applyButton}
                 loading={isLoading}
