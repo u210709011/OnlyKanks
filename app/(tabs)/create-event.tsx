@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, TextInput, StyleSheet, Alert, Image, Pressable, Text, ScrollView, ActivityIndicator, TouchableOpacity, Modal, FlatList, Platform } from 'react-native';
+import { View, TextInput, StyleSheet, Alert, Image, Pressable, Text, ScrollView, ActivityIndicator, TouchableOpacity, Modal, FlatList, Platform, Switch } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as yup from 'yup';
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
@@ -21,13 +21,33 @@ import { EventsService } from '../../services/events.service';
 
 // Define the schema for validation
 const schema = yup.object().shape({
-  title: yup.string().required('Tittle is required'),
+  title: yup.string().required('Title is required'),
   date: yup.date().required('Date is required'),
   location: yup.string().required('Location is required'),
   description: yup.string(),
   imageUrl: yup.string(),
-  capacity: yup.number().positive('Capacity must be a positive number').required('Capacity is required'),
+  capacity: yup.number().positive('Capacity must be a positive number').min(2, 'Capacity must be at least 2 people').nullable(),
+  duration: yup.number().positive('Duration must be a positive number').min(15, 'Duration must be at least 15 minutes').required('Duration is required'),
+  addressDetails: yup.object().shape({
+    street: yup.string(),
+    city: yup.string(),
+    state: yup.string(),
+    zip: yup.string(),
+  }),
 });
+
+// Add this interface before the CreateEventScreen function
+interface LocationWithDetails {
+  latitude: number;
+  longitude: number;
+  address: string;
+  details?: {
+    street: string;
+    city: string;
+    state: string;
+    zip: string;
+  };
+}
 
 export default function CreateEventScreen(): React.ReactElement {
   const { theme, isDark } = useTheme();
@@ -50,8 +70,21 @@ export default function CreateEventScreen(): React.ReactElement {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const today = startOfDay(new Date());
   
+  // Duration states with days, hours, minutes
+  const [durationDays, setDurationDays] = useState<string>('0');
+  const [durationHours, setDurationHours] = useState<string>('1');
+  const [durationMinutes, setDurationMinutes] = useState<string>('0');
+
+  // Address details states
+  const [showAddressDetails, setShowAddressDetails] = useState<boolean>(false);
+  const [addressStreet, setAddressStreet] = useState<string>('');
+  const [addressCity, setAddressCity] = useState<string>('');
+  const [addressState, setAddressState] = useState<string>('');
+  const [addressZip, setAddressZip] = useState<string>('');
+
   // New states for capacity and participants
   const [capacity, setCapacity] = useState<string>('');
+  const [duration, setDuration] = useState<string>('');
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [showParticipantsModal, setShowParticipantsModal] = useState<boolean>(false);
   const [editingParticipant, setEditingParticipant] = useState<Participant | null>(null);
@@ -146,6 +179,15 @@ export default function CreateEventScreen(): React.ReactElement {
   };
 
   const handleAddParticipant = () => {
+    // Check if adding a participant would exceed capacity
+    if (capacity && participants.length >= parseInt(capacity, 10)) {
+      Alert.alert(
+        'Capacity Limit Reached', 
+        'Cannot add more participants as it would exceed the event capacity. Please increase the capacity or remove some participants.'
+      );
+      return;
+    }
+    
     setParticipantName('');
     setAddParticipantType(ParticipantType.NON_USER);
     setShowAddModal(true);
@@ -154,6 +196,15 @@ export default function CreateEventScreen(): React.ReactElement {
   const handleSaveNewParticipant = () => {
     if (!participantName.trim()) {
       Alert.alert('Error', 'Participant name cannot be empty');
+      return;
+    }
+
+    // Check if adding a participant would exceed capacity
+    if (capacity && participants.length >= parseInt(capacity, 10)) {
+      Alert.alert(
+        'Capacity Limit Reached', 
+        'Cannot add more participants as it would exceed the event capacity. Please increase the capacity or remove some participants.'
+      );
       return;
     }
 
@@ -276,6 +327,16 @@ export default function CreateEventScreen(): React.ReactElement {
     }
   };
 
+  // Calculate total duration in minutes from days, hours, minutes inputs
+  useEffect(() => {
+    const days = parseInt(durationDays, 10) || 0;
+    const hours = parseInt(durationHours, 10) || 0;
+    const minutes = parseInt(durationMinutes, 10) || 0;
+    
+    const totalMinutes = (days * 24 * 60) + (hours * 60) + minutes;
+    setDuration(totalMinutes > 0 ? totalMinutes.toString() : '');
+  }, [durationDays, durationHours, durationMinutes]);
+
   // Add a new function to reset the form
   const resetForm = () => {
     setTitle('');
@@ -283,6 +344,15 @@ export default function CreateEventScreen(): React.ReactElement {
     setDate(new Date());
     setLocation('');
     setCapacity('');
+    setDuration('');
+    setDurationDays('0');
+    setDurationHours('1');
+    setDurationMinutes('0');
+    setShowAddressDetails(false);
+    setAddressStreet('');
+    setAddressCity('');
+    setAddressState('');
+    setAddressZip('');
     setImage(null);
     setImagePreview(null);
     setImageUrl('');
@@ -314,8 +384,30 @@ export default function CreateEventScreen(): React.ReactElement {
         return;
       }
       
-      if (!capacity || parseInt(capacity, 10) <= 0) {
-        Alert.alert('Error', 'Please enter a valid capacity');
+      if (!title.trim()) {
+        Alert.alert('Error', 'Title is required');
+        return;
+      }
+      
+      if (capacity && parseInt(capacity, 10) <= 1) {
+        Alert.alert('Error', 'Capacity must be at least 2 people');
+        return;
+      }
+
+      if (!duration || parseInt(duration, 10) < 15) {
+        Alert.alert('Error', 'Duration must be at least 15 minutes');
+        return;
+      }
+
+      // Check if participants exceed capacity
+      if (capacity && participants.length > parseInt(capacity, 10)) {
+        Alert.alert('Error', 'Number of participants cannot exceed capacity');
+        return;
+      }
+      
+      // Check if all capacity is already filled
+      if (capacity && participants.length === parseInt(capacity, 10)) {
+        Alert.alert('Error', 'Cannot publish an event with all capacity already filled. Either increase capacity or remove some participants.');
         return;
       }
 
@@ -335,21 +427,35 @@ export default function CreateEventScreen(): React.ReactElement {
         }
       }
 
+      // Prepare location data with optional address details
+      const locationData: LocationWithDetails = {
+        latitude: markerCoordinates.latitude,
+        longitude: markerCoordinates.longitude,
+        address: location,
+      };
+
+      // Add address details if provided
+      if (showAddressDetails) {
+        locationData.details = {
+          street: addressStreet,
+          city: addressCity,
+          state: addressState,
+          zip: addressZip
+        };
+      }
+
       const eventData = {
         title,
         description,
         date: new Date(date),
-        location: {
-          latitude: markerCoordinates.latitude,
-          longitude: markerCoordinates.longitude,
-          address: location,
-        },
+        location: locationData,
         imageUrl: finalImageUrl,
         createdBy: auth.currentUser?.uid || '',
         createdAt: new Date(),
         updatedAt: new Date(),
         uploadDate: serverTimestamp(), // Add upload date
-        capacity: parseInt(capacity, 10),
+        capacity: capacity ? parseInt(capacity, 10) : null,
+        duration: duration ? parseInt(duration, 10) : null,
         participants: participants
       };
 
@@ -513,7 +619,7 @@ export default function CreateEventScreen(): React.ReactElement {
       </View>
 
       <View style={[styles.formContainer, { backgroundColor: theme.card }]}>
-        <Text style={[styles.label, { color: theme.text + '80', fontFamily: 'Roboto' }]}>Event Title</Text>
+        <Text style={[styles.label, { color: theme.text + '80', fontFamily: 'Roboto' }]}>Event Title *</Text>
         <TextInput
           style={[styles.input, { backgroundColor: theme.input, color: theme.text }]}
           placeholder="Give your event a name"
@@ -590,8 +696,101 @@ export default function CreateEventScreen(): React.ReactElement {
           )
         )}
 
+        <Text style={[styles.label, { color: theme.text + '80', fontFamily: 'Roboto' }]}>
+          Event Duration *
+        </Text>
+        <View style={styles.durationContainer}>
+          <View style={styles.durationRow}>
+            <View style={styles.durationField}>
+              <TextInput
+                style={[styles.durationInput, { backgroundColor: theme.input, color: theme.text }]}
+                keyboardType="number-pad"
+                placeholder="0"
+                placeholderTextColor={theme.text + '60'}
+                value={durationDays}
+                onChangeText={setDurationDays}
+              />
+              <Text style={[styles.durationLabel, { color: theme.text }]}>days</Text>
+            </View>
+            
+            <View style={styles.durationField}>
+              <TextInput
+                style={[styles.durationInput, { backgroundColor: theme.input, color: theme.text }]}
+                keyboardType="number-pad"
+                placeholder="1"
+                placeholderTextColor={theme.text + '60'}
+                value={durationHours}
+                onChangeText={setDurationHours}
+              />
+              <Text style={[styles.durationLabel, { color: theme.text }]}>hours</Text>
+            </View>
+            
+            <View style={styles.durationField}>
+              <TextInput
+                style={[styles.durationInput, { backgroundColor: theme.input, color: theme.text }]}
+                keyboardType="number-pad"
+                placeholder="0"
+                placeholderTextColor={theme.text + '60'}
+                value={durationMinutes}
+                onChangeText={setDurationMinutes}
+              />
+              <Text style={[styles.durationLabel, { color: theme.text }]}>minutes</Text>
+            </View>
+          </View>
+          
+          <Text style={[styles.durationHelp, { color: theme.text + '80' }]}>
+            Total duration: {duration ? `${parseInt(duration, 10)} minutes` : 'Not set'}
+          </Text>
+          
+          <View style={styles.durationPresets}>
+            <TouchableOpacity
+              style={[styles.durationPreset, { backgroundColor: theme.input }]}
+              onPress={() => {
+                setDurationDays('0');
+                setDurationHours('1');
+                setDurationMinutes('0');
+              }}
+            >
+              <Text style={[styles.durationPresetText, { color: theme.text }]}>1 hour</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={[styles.durationPreset, { backgroundColor: theme.input }]}
+              onPress={() => {
+                setDurationDays('0');
+                setDurationHours('2');
+                setDurationMinutes('0');
+              }}
+            >
+              <Text style={[styles.durationPresetText, { color: theme.text }]}>2 hours</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={[styles.durationPreset, { backgroundColor: theme.input }]}
+              onPress={() => {
+                setDurationDays('0');
+                setDurationHours('3');
+                setDurationMinutes('0');
+              }}
+            >
+              <Text style={[styles.durationPresetText, { color: theme.text }]}>3 hours</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={[styles.durationPreset, { backgroundColor: theme.input }]}
+              onPress={() => {
+                setDurationDays('1');
+                setDurationHours('0');
+                setDurationMinutes('0');
+              }}
+            >
+              <Text style={[styles.durationPresetText, { color: theme.text }]}>1 day</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
         <View style={styles.mapSection}>
-          <Text style={[styles.label, { color: theme.text + '80', fontFamily: 'Roboto' }]}>Event Location</Text>
+          <Text style={[styles.label, { color: theme.text + '80', fontFamily: 'Roboto' }]}>Event Location *</Text>
           
           {isLocationLoading ? (
             <View style={[styles.map, { alignItems: 'center', justifyContent: 'center', backgroundColor: theme.card + '50' }]}>
@@ -632,18 +831,98 @@ export default function CreateEventScreen(): React.ReactElement {
           value={location}
           onChangeText={setLocation}
         />
+        
+        <View style={styles.toggleContainer}>
+          <Text style={[styles.toggleLabel, { color: theme.text + '80' }]}>Show detailed address</Text>
+          <Switch
+            value={showAddressDetails}
+            onValueChange={setShowAddressDetails}
+            trackColor={{ false: theme.background, true: theme.primary + '60' }}
+            thumbColor={showAddressDetails ? theme.primary : theme.text + '40'}
+          />
+        </View>
+        
+        {showAddressDetails && (
+          <View style={styles.addressDetailsContainer}>
+            <TextInput
+              style={[styles.input, { backgroundColor: theme.input, color: theme.text }]}
+              placeholder="Street"
+              placeholderTextColor={theme.text + '60'}
+              value={addressStreet}
+              onChangeText={setAddressStreet}
+            />
+            
+            <View style={styles.addressRow}>
+              <TextInput
+                style={[styles.input, { backgroundColor: theme.input, color: theme.text, flex: 1, marginRight: 8 }]}
+                placeholder="City"
+                placeholderTextColor={theme.text + '60'}
+                value={addressCity}
+                onChangeText={setAddressCity}
+              />
+              
+              <TextInput
+                style={[styles.input, { backgroundColor: theme.input, color: theme.text, flex: 1 }]}
+                placeholder="State"
+                placeholderTextColor={theme.text + '60'}
+                value={addressState}
+                onChangeText={setAddressState}
+              />
+            </View>
+            
+            <TextInput
+              style={[styles.input, { backgroundColor: theme.input, color: theme.text, width: '50%' }]}
+              placeholder="ZIP Code"
+              placeholderTextColor={theme.text + '60'}
+              keyboardType="number-pad"
+              value={addressZip}
+              onChangeText={setAddressZip}
+            />
+          </View>
+        )}
 
         <Text style={[styles.label, { color: theme.text + '80', fontFamily: 'Roboto' }]}>
-          Event Capacity
+          Event Capacity (min 2 people)
         </Text>
-        <TextInput
-          style={[styles.input, { backgroundColor: theme.input, color: theme.text }]}
-          placeholder="How many people can attend?"
-          placeholderTextColor={theme.text + '60'}
-          keyboardType="number-pad"
-          value={capacity}
-          onChangeText={setCapacity}
-        />
+        <View style={styles.capacityContainer}>
+          <View style={[styles.capacitySelector, { backgroundColor: theme.input }]}>
+            <TouchableOpacity
+              style={[styles.capacityOption, { backgroundColor: capacity === '5' ? theme.primary : 'transparent' }]}
+              onPress={() => setCapacity('5')}
+            >
+              <Text style={[styles.capacityText, { color: capacity === '5' ? 'white' : theme.text }]}>5</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.capacityOption, { backgroundColor: capacity === '10' ? theme.primary : 'transparent' }]}
+              onPress={() => setCapacity('10')}
+            >
+              <Text style={[styles.capacityText, { color: capacity === '10' ? 'white' : theme.text }]}>10</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.capacityOption, { backgroundColor: capacity === '20' ? theme.primary : 'transparent' }]}
+              onPress={() => setCapacity('20')}
+            >
+              <Text style={[styles.capacityText, { color: capacity === '20' ? 'white' : theme.text }]}>20</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.capacityOption, { backgroundColor: capacity === '50' ? theme.primary : 'transparent' }]}
+              onPress={() => setCapacity('50')}
+            >
+              <Text style={[styles.capacityText, { color: capacity === '50' ? 'white' : theme.text }]}>50</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.customCapacityContainer}>
+            <TextInput
+              style={[styles.customCapacityInput, { backgroundColor: theme.input, color: theme.text }]}
+              placeholder="Custom"
+              placeholderTextColor={theme.text + '60'}
+              keyboardType="number-pad"
+              value={capacity}
+              onChangeText={setCapacity}
+            />
+            <Text style={[styles.capacityUnit, { color: theme.text }]}>people</Text>
+          </View>
+        </View>
 
         <View style={styles.participantsSection}>
           <View style={styles.participantsSectionHeader}>
@@ -1271,5 +1550,105 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: 2,
+  },
+  durationContainer: {
+    marginBottom: 16,
+  },
+  durationRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  durationField: {
+    flex: 1,
+    marginHorizontal: 4,
+  },
+  durationInput: {
+    height: 48,
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    textAlign: 'center',
+    fontFamily: 'Roboto',
+    fontSize: 16,
+  },
+  durationLabel: {
+    textAlign: 'center',
+    marginTop: 4,
+    fontSize: 14,
+    fontFamily: 'Roboto',
+  },
+  durationHelp: {
+    textAlign: 'center',
+    fontSize: 14,
+    marginBottom: 8,
+    fontFamily: 'Roboto',
+  },
+  durationPresets: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  durationPreset: {
+    width: '48%',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  durationPresetText: {
+    fontWeight: '500',
+    fontFamily: 'Roboto',
+  },
+  toggleContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingHorizontal: 4,
+  },
+  toggleLabel: {
+    fontSize: 16,
+    fontFamily: 'Roboto',
+  },
+  addressDetailsContainer: {
+    marginBottom: 16,
+  },
+  addressRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  capacityContainer: {
+    marginBottom: 16,
+  },
+  capacitySelector: {
+    flexDirection: 'row',
+    borderRadius: 8,
+    marginBottom: 8,
+    overflow: 'hidden',
+  },
+  capacityOption: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  capacityText: {
+    fontWeight: '500',
+    fontFamily: 'Roboto',
+  },
+  customCapacityContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  customCapacityInput: {
+    flex: 1,
+    height: 48,
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    fontFamily: 'Roboto',
+  },
+  capacityUnit: {
+    marginLeft: 8,
+    fontSize: 16,
+    fontFamily: 'Roboto',
   },
 });

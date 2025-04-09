@@ -3,7 +3,7 @@ import { View, Text, Image, StyleSheet, TouchableOpacity, Dimensions, ViewStyle,
 import { useTheme } from '../../context/theme.context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { format } from 'date-fns';
+import { format, addMinutes, isPast } from 'date-fns';
 import { useRouter } from 'expo-router';
 import { doc, getDoc, updateDoc, arrayUnion, addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../config/firebase';
@@ -17,6 +17,22 @@ interface EventCardProps {
   onPress?: () => void;
 }
 
+// Add a helper function to format duration in a user-friendly way
+const formatDuration = (minutes: number): string => {
+  if (!minutes) return '0 min';
+  
+  const days = Math.floor(minutes / (24 * 60));
+  const hours = Math.floor((minutes % (24 * 60)) / 60);
+  const mins = minutes % 60;
+  
+  let result = '';
+  if (days > 0) result += `${days} day${days > 1 ? 's' : ''} `;
+  if (hours > 0) result += `${hours} hr${hours > 1 ? 's' : ''} `;
+  if (mins > 0) result += `${mins} min${mins > 1 ? 's' : ''}`;
+  
+  return result.trim();
+};
+
 export const EventCard: React.FC<EventCardProps> = ({ event, onPress }) => {
   const { theme, isDark } = useTheme();
   const router = useRouter();
@@ -25,8 +41,19 @@ export const EventCard: React.FC<EventCardProps> = ({ event, onPress }) => {
   const [isPressed, setIsPressed] = useState(false);
   const [isJoinRequested, setIsJoinRequested] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
+  const [isExpired, setIsExpired] = useState(false);
 
   useEffect(() => {
+    // Check if event is expired (current time is after event time + duration)
+    const eventDate = event.date.toDate();
+    const endTime = event.duration 
+      ? addMinutes(eventDate, event.duration) 
+      : null;
+    
+    if (endTime && isPast(endTime)) {
+      setIsExpired(true);
+    }
+
     const fetchCreator = async () => {
       try {
         if (event.createdBy) {
@@ -64,7 +91,7 @@ export const EventCard: React.FC<EventCardProps> = ({ event, onPress }) => {
         setIsJoinRequested(true);
       }
     }
-  }, [event.createdBy, event.participants, user]);
+  }, [event.createdBy, event.participants, user, event.date, event.duration]);
 
   const handlePress = () => {
     if (onPress) {
@@ -137,7 +164,8 @@ export const EventCard: React.FC<EventCardProps> = ({ event, onPress }) => {
         styles.cardContainer,
         { 
           backgroundColor: theme.card,
-          transform: [{ scale: isPressed ? 0.98 : 1 }]
+          transform: [{ scale: isPressed ? 0.98 : 1 }],
+          opacity: isExpired ? 0.7 : 1
         }
       ]}
       onPress={handlePress}
@@ -148,22 +176,29 @@ export const EventCard: React.FC<EventCardProps> = ({ event, onPress }) => {
         {event.imageUrl ? (
           <Image
             source={{ uri: event.imageUrl }}
-            style={styles.image}
+            style={[styles.image, isExpired && styles.expiredImage]}
             resizeMode="cover"
           />
         ) : (
-          <View style={[styles.placeholderImage, { backgroundColor: isDark ? theme.background : theme.primary + '15' }]}>
-            <Ionicons name="calendar-outline" size={48} color={theme.primary} />
+          <View style={[
+            styles.placeholderImage, 
+            { backgroundColor: isDark ? theme.background : theme.primary + '15' },
+            isExpired && styles.expiredPlaceholder
+          ]}>
+            <Ionicons name="calendar-outline" size={48} color={isExpired ? theme.text + '80' : theme.primary} />
           </View>
         )}
         
         <LinearGradient
-          colors={['transparent', 'rgba(0,0,0,0.8)']}
+          colors={['transparent', isExpired ? 'rgba(0,0,0,0.9)' : 'rgba(0,0,0,0.8)']}
           style={styles.gradient}
         />
         
         <View style={styles.imageBadges}>
-          <View style={[styles.dateBadge, { backgroundColor: theme.primary }]}>
+          <View style={[
+            styles.dateBadge, 
+            { backgroundColor: isExpired ? theme.text + '80' : theme.primary }
+          ]}>
             <Text style={styles.dateDay}>
               {format(eventDate, 'd')}
             </Text>
@@ -171,33 +206,71 @@ export const EventCard: React.FC<EventCardProps> = ({ event, onPress }) => {
               {format(eventDate, 'MMM')}
             </Text>
           </View>
+          
+          {isExpired && (
+            <View style={[styles.expiredBadge, { backgroundColor: theme.error }]}>
+              <Text style={styles.expiredText}>Ended</Text>
+            </View>
+          )}
         </View>
       </View>
 
       <View style={styles.content}>
-        <Text style={[styles.title, { color: theme.text }]} numberOfLines={2}>
+        <Text style={[
+          styles.title, 
+          { color: isExpired ? theme.text + '80' : theme.text }
+        ]} numberOfLines={2}>
           {event.title}
         </Text>
         
         <View style={styles.metaInfo}>
           <View style={styles.metaItem}>
-            <Ionicons name="time-outline" size={16} color={theme.text + 'BB'} />
-            <Text style={[styles.metaText, { color: theme.text + 'BB' }]}>
+            <Ionicons 
+              name="time-outline" 
+              size={16} 
+              color={isExpired ? theme.text + '60' : theme.text + 'BB'} 
+            />
+            <Text style={[
+              styles.metaText, 
+              { color: isExpired ? theme.text + '60' : theme.text + 'BB' }
+            ]}>
               {formattedTime}
             </Text>
           </View>
           
           <View style={styles.metaItem}>
-            <Ionicons name="location-outline" size={16} color={theme.text + 'BB'} />
-            <Text style={[styles.metaText, { color: theme.text + 'BB' }]} numberOfLines={1}>
+            <Ionicons name="location-outline" size={16} color={isExpired ? theme.text + '60' : theme.text + 'BB'} />
+            <Text style={[
+              styles.metaText, 
+              { color: isExpired ? theme.text + '60' : theme.text + 'BB' }
+            ]} numberOfLines={1}>
               {typeof event.location === 'string' 
                 ? event.location 
                 : (event.location?.address || 'Location TBD')}
             </Text>
           </View>
+          
+          {event.duration && (
+            <View style={styles.metaItem}>
+              <Ionicons 
+                name="hourglass-outline" 
+                size={16} 
+                color={isExpired ? theme.text + '60' : theme.text + 'BB'} 
+              />
+              <Text style={[
+                styles.metaText, 
+                { color: isExpired ? theme.text + '60' : theme.text + 'BB' }
+              ]}>
+                {formatDuration(event.duration)}
+              </Text>
+            </View>
+          )}
         </View>
         
-        <Text style={[styles.description, { color: theme.text + '99' }]} numberOfLines={2}>
+        <Text style={[
+          styles.description, 
+          { color: isExpired ? theme.text + '60' : theme.text + '99' }
+        ]} numberOfLines={2}>
           {event.description}
         </Text>
         
@@ -419,6 +492,26 @@ const styles = StyleSheet.create({
   },
   availableSpots: {
     fontSize: 12,
+    fontFamily: 'Roboto',
+  },
+  expiredImage: {
+    opacity: 0.6,
+  },
+  expiredPlaceholder: {
+    opacity: 0.7,
+  },
+  expiredBadge: {
+    marginLeft: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  expiredText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: 'bold',
     fontFamily: 'Roboto',
   },
 }); 

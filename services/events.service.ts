@@ -35,6 +35,12 @@ export interface Event {
     latitude: number;
     longitude: number;
     address: string;
+    details?: {
+      street: string;
+      city: string;
+      state: string;
+      zip: string;
+    };
   };
   imageUrl?: string;
   createdBy: string;
@@ -43,6 +49,7 @@ export interface Event {
   uploadDate?: any; // When the event was uploaded
   capacity?: number; // Maximum number of participants
   participants?: Participant[]; // List of participants (both users and non-users)
+  duration?: number; // Duration in minutes
 }
 
 export interface EventFilterOptions {
