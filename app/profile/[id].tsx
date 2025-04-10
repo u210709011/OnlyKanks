@@ -16,7 +16,8 @@ import { EventCard } from '../../components/events/EventCard';
 const { width } = Dimensions.get('window');
 const GRID_SPACING = 2;
 const NUM_COLUMNS = 3;
-const ITEM_WIDTH = (width - (NUM_COLUMNS - 1) * GRID_SPACING - 32) / NUM_COLUMNS;
+const GRID_GAP = 8; // Horizontal and vertical gap between grid items
+const ITEM_WIDTH = (width - 32 - (NUM_COLUMNS - 1) * GRID_GAP) / NUM_COLUMNS;
 
 type ViewMode = 'grid' | 'list';
 
@@ -208,12 +209,15 @@ export default function UserProfileScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <Pressable
-        style={[styles.backButton, { backgroundColor: theme.card + '80' }]}
-        onPress={() => router.back()}
-      >
-        <Ionicons name="arrow-back" size={24} color={theme.text} />
-      </Pressable>
+      <View style={[styles.header, { 
+        paddingTop: insets.top + 15,
+        backgroundColor: theme.background,
+        borderBottomColor: theme.border,
+        borderBottomWidth: 1
+      }]}>
+        <View style={{ width: 40 }} />
+        <Text style={[styles.username, { color: theme.text }]}>{displayName}</Text>
+      </View>
       
       {viewMode === 'grid' ? (
         <FlatList
@@ -223,28 +227,36 @@ export default function UserProfileScreen() {
             const dateB = b.date.toDate ? b.date.toDate() : new Date(b.date);
             return dateB.getTime() - dateA.getTime(); // Newest first
           })}
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              style={[styles.gridItem, { width: ITEM_WIDTH }]}
-              onPress={() => router.push(`/event/${item.id}`)}
-            >
-              {item.imageUrl ? (
-                <Image
-                  source={{ uri: item.imageUrl }}
-                  style={styles.gridItemImage}
-                />
-              ) : (
-                <View style={[styles.gridItemPlaceholder, { backgroundColor: theme.card }]}>
-                  <Ionicons name="calendar-outline" size={24} color={theme.primary} />
-                </View>
-              )}
-            </TouchableOpacity>
-          )}
+          renderItem={({ item, index }) => {
+            // Calculate the column position
+            const column = index % NUM_COLUMNS;
+            return (
+              <TouchableOpacity
+                style={[
+                  styles.gridItem, 
+                  { 
+                    width: ITEM_WIDTH,
+                    marginLeft: column > 0 ? GRID_GAP : 0 
+                  }
+                ]}
+                onPress={() => router.push(`/event/${item.id}`)}
+              >
+                {item.imageUrl ? (
+                  <Image
+                    source={{ uri: item.imageUrl }}
+                    style={styles.gridItemImage}
+                  />
+                ) : (
+                  <View style={[styles.gridItemPlaceholder, { backgroundColor: theme.card }]}>
+                    <Ionicons name="calendar-outline" size={24} color={theme.primary} />
+                  </View>
+                )}
+              </TouchableOpacity>
+            );
+          }}
           keyExtractor={(item) => item.id}
           numColumns={NUM_COLUMNS}
-          columnWrapperStyle={styles.gridRow}
           contentContainerStyle={{ 
-            paddingTop: insets.top + 60,
             paddingBottom: insets.bottom + 20,
             paddingHorizontal: 16
           }}
@@ -698,6 +710,7 @@ const styles = StyleSheet.create({
     aspectRatio: 1,
     borderRadius: 8,
     overflow: 'hidden',
+    marginBottom: GRID_GAP, // Use the same gap for vertical spacing
   },
   gridItemImage: {
     width: '100%',

@@ -411,44 +411,29 @@ export default function EventScreen() {
             <View style={styles.infoRow}>
               <Ionicons name="location-outline" size={20} color={isExpired ? theme.text + '60' : theme.text} />
               <View style={{ flex: 1 }}>
-                <Text style={[styles.infoText, { color: isExpired ? theme.text + '60' : theme.text }]}>
+                <Text style={[styles.infoText, { color: isExpired ? theme.text + '60' : theme.text }]} numberOfLines={1}>
                   {event.location.address}
                 </Text>
                 {event.location.details && (
                   <View style={styles.addressDetailsContainer}>
-                    {event.location.details.street && (
-                      <Text style={[styles.addressDetail, { color: isExpired ? theme.text + '60' : theme.text }]}>
-                        {event.location.details.street}
-                      </Text>
-                    )}
-                    <View style={{ flexDirection: 'row' }}>
-                      {event.location.details.city && (
-                        <Text style={[styles.addressDetail, { color: isExpired ? theme.text + '60' : theme.text }]}>
-                          {event.location.details.city}
-                          {(event.location.details.state || event.location.details.zip) && ', '}
-                        </Text>
-                      )}
-                      {event.location.details.state && (
-                        <Text style={[styles.addressDetail, { color: isExpired ? theme.text + '60' : theme.text }]}>
-                          {event.location.details.state} 
-                          {event.location.details.zip && ' '}
-                        </Text>
-                      )}
-                      {event.location.details.zip && (
-                        <Text style={[styles.addressDetail, { color: isExpired ? theme.text + '60' : theme.text }]}>
-                          {event.location.details.zip}
-                        </Text>
-                      )}
-                    </View>
+                    <Text 
+                      style={[styles.addressDetail, { color: isExpired ? theme.text + '60' : theme.text + '80' }]}
+                      numberOfLines={1}
+                    >
+                      {event.location.details.street ? `${event.location.details.street}, ` : ''}
+                      {event.location.details.city ? `${event.location.details.city}, ` : ''}
+                      {event.location.details.state || ''} 
+                      {event.location.details.zip || ''}
+                    </Text>
                   </View>
                 )}
               </View>
             </View>
 
             <View style={styles.infoRow}>
-              <Ionicons name="people-outline" size={20} color={theme.text} />
-              <Text style={[styles.infoText, { color: theme.text }]}>
-                {acceptedParticipants.length} attending {event.capacity ? `• ${event.capacity} capacity` : ''}
+              <Ionicons name="people-outline" size={20} color={isExpired ? theme.text + '60' : theme.text} />
+              <Text style={[styles.infoText, { color: isExpired ? theme.text + '60' : theme.text }]}>
+                {acceptedParticipants.length}/{event.capacity || '∞'} participants
               </Text>
               {event.capacity && acceptedParticipants.length < event.capacity && !isEventCreator && !userParticipant && (
                 <TouchableOpacity 
@@ -502,7 +487,7 @@ export default function EventScreen() {
           <View style={styles.participantsSection}>
             <View style={styles.sectionHeader}>
               <Text style={[styles.sectionTitle, { color: theme.text }]}>
-                Participants ({acceptedParticipants.length}/{event.capacity || 'unlimited'})
+                Participants ({acceptedParticipants.length}/{event.capacity || '∞'})
               </Text>
               
               {isEventCreator && pendingParticipants.length > 0 && (
@@ -933,12 +918,13 @@ const styles = StyleSheet.create({
     fontFamily: 'Roboto',
   },
   addressDetailsContainer: {
-    marginTop: 4,
+    marginTop: 2,
+    marginBottom: 4,
   },
   addressDetail: {
-    fontSize: 14,
+    fontSize: 13,
     fontFamily: 'Roboto',
-    lineHeight: 20,
+    lineHeight: 18,
   },
 });
 

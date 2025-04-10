@@ -14,7 +14,8 @@ import { useFocusEffect } from '@react-navigation/native';
 const { width } = Dimensions.get('window');
 const GRID_SPACING = 2;
 const NUM_COLUMNS = 3;
-const ITEM_WIDTH = (width - (NUM_COLUMNS - 1) * GRID_SPACING - 32) / NUM_COLUMNS;
+const GRID_GAP = 8;
+const ITEM_WIDTH = (width - (NUM_COLUMNS - 1) * GRID_GAP - 32) / NUM_COLUMNS;
 
 type ViewMode = 'grid' | 'list';
 
@@ -257,6 +258,7 @@ const styles = StyleSheet.create({
     aspectRatio: 1,
     borderRadius: 8,
     overflow: 'hidden',
+    marginBottom: GRID_GAP,
   },
   gridItemImage: {
     width: '100%',
@@ -401,26 +403,35 @@ export default function ProfileScreen() {
             const dateB = b.date.toDate ? b.date.toDate() : new Date(b.date);
             return dateB.getTime() - dateA.getTime(); // Newest first
           })}
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              style={[styles.gridItem, { width: ITEM_WIDTH }]}
-              onPress={() => router.push(`/event/${item.id}`)}
-            >
-              {item.imageUrl ? (
-                <Image
-                  source={{ uri: item.imageUrl }}
-                  style={styles.gridItemImage}
-                />
-              ) : (
-                <View style={[styles.gridItemPlaceholder, { backgroundColor: theme.card }]}>
-                  <Ionicons name="calendar-outline" size={24} color={theme.primary} />
-                </View>
-              )}
-            </TouchableOpacity>
-          )}
+          renderItem={({ item, index }) => {
+            // Calculate the column position
+            const column = index % NUM_COLUMNS;
+            return (
+              <TouchableOpacity
+                style={[
+                  styles.gridItem, 
+                  { 
+                    width: ITEM_WIDTH,
+                    marginLeft: column > 0 ? GRID_GAP : 0 
+                  }
+                ]}
+                onPress={() => router.push(`/event/${item.id}`)}
+              >
+                {item.imageUrl ? (
+                  <Image
+                    source={{ uri: item.imageUrl }}
+                    style={styles.gridItemImage}
+                  />
+                ) : (
+                  <View style={[styles.gridItemPlaceholder, { backgroundColor: theme.card }]}>
+                    <Ionicons name="calendar-outline" size={24} color={theme.primary} />
+                  </View>
+                )}
+              </TouchableOpacity>
+            );
+          }}
           keyExtractor={(item) => item.id}
           numColumns={NUM_COLUMNS}
-          columnWrapperStyle={styles.gridRow}
           ListHeaderComponent={() => (
             <>
               {/* Profile section */}
@@ -531,6 +542,10 @@ export default function ProfileScreen() {
             <EventCard event={item} />
           )}
           keyExtractor={(item) => item.id}
+          contentContainerStyle={{ 
+            paddingBottom: insets.bottom + 20,
+            paddingHorizontal: 16
+          }}
           ListHeaderComponent={() => (
             <>
               {/* Profile section */}
@@ -624,12 +639,8 @@ export default function ProfileScreen() {
               </Text>
             </View>
           }
-          contentContainerStyle={{ 
-            paddingBottom: insets.bottom + 20,
-            paddingHorizontal: 16
-          }}
         />
       )}
     </View>
   );
-} 
+}
