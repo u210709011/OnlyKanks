@@ -13,6 +13,7 @@ service cloud.firestore {
         resource.data.createdBy == request.auth.uid || 
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['participants'])
       );
+      allow delete: if request.auth != null && resource.data.createdBy == request.auth.uid;
     }
 
     match /messages/{messageId} {
@@ -75,10 +76,9 @@ service cloud.firestore {
     }
     
     match /friends/{friendId} {
-      // Only the users in the friendship can read it
-      allow read: if request.auth != null &&
-        (resource.data.userId == request.auth.uid || 
-         resource.data.friendId == request.auth.uid);
+      // Allow any authenticated user to read friends data 
+      // This enables friend counts and friendship checks
+      allow read: if request.auth != null;
       
       // Anyone can create a friend relationship involving themselves
       allow create: if request.auth != null && 

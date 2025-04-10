@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { auth, db } from '../../config/firebase';
 import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
-import { Event } from '../../services/events.service';
+import { Event, EventsService } from '../../services/events.service';
 import { MessagesService } from '../../services/messages.service';
 import { FriendsService, FriendRequestStatus } from '../../services/friends.service';
 import { User, UserService } from '../../services/user.service';
@@ -31,6 +31,8 @@ export default function UserProfileScreen() {
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const [userBio, setUserBio] = useState<string>('');
   const [userEvents, setUserEvents] = useState<Event[]>([]);
+  const [friendsCount, setFriendsCount] = useState<number>(0);
+  const [attendingCount, setAttendingCount] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [friendshipStatus, setFriendshipStatus] = useState<'none' | 'sent' | 'received' | 'friends'>('none');
@@ -84,6 +86,22 @@ export default function UserProfileScreen() {
           setUserEvents(eventsData);
         } catch (error) {
           console.error('Error fetching user events:', error);
+        }
+        
+        // Fetch friends count
+        try {
+          const count = await FriendsService.getFriendsCount(userId);
+          setFriendsCount(count);
+        } catch (error) {
+          console.error('Error fetching friends count:', error);
+        }
+        
+        // Fetch attended events count
+        try {
+          const count = await EventsService.getAttendingEventsCount(userId);
+          setAttendingCount(count);
+        } catch (error) {
+          console.error('Error fetching attending events count:', error);
         }
         
         // Fetch friendship status if viewing someone else's profile
@@ -264,18 +282,10 @@ export default function UserProfileScreen() {
             <>
               <View style={styles.profileSection}>
                 <View style={styles.profileHeader}>
-                  {profileImage ? (
-                    <Image 
-                      source={{ uri: profileImage }} 
-                      style={styles.profileImage} 
-                    />
-                  ) : (
-                    <View style={[styles.profileImagePlaceholder, { backgroundColor: theme.card }]}>
-                      <Text style={[styles.profileImageText, { color: theme.primary }]}>
-                        {displayName.charAt(0).toUpperCase()}
-                      </Text>
-                    </View>
-                  )}
+                  <Image 
+                    source={profileImage ? { uri: profileImage } : require('../../assets/default-avatar.png')} 
+                    style={styles.profileImage}
+                  />
                   
                   <View style={styles.statsContainer}>
                     <View style={styles.statItem}>
@@ -284,8 +294,13 @@ export default function UserProfileScreen() {
                     </View>
                     
                     <View style={styles.statItem}>
-                      <Text style={[styles.statNumber, { color: theme.text }]}>0</Text>
+                      <Text style={[styles.statNumber, { color: theme.text }]}>{friendsCount}</Text>
                       <Text style={[styles.statLabel, { color: theme.text + '80' }]}>Friends</Text>
+                    </View>
+                    
+                    <View style={styles.statItem}>
+                      <Text style={[styles.statNumber, { color: theme.text }]}>{attendingCount}</Text>
+                      <Text style={[styles.statLabel, { color: theme.text + '80' }]}>Attending</Text>
                     </View>
                   </View>
                 </View>
@@ -409,7 +424,6 @@ export default function UserProfileScreen() {
           )}
           keyExtractor={(item) => item.id}
           contentContainerStyle={{ 
-            paddingTop: insets.top + 60,
             paddingBottom: insets.bottom + 20,
             paddingHorizontal: 16
           }}
@@ -417,18 +431,10 @@ export default function UserProfileScreen() {
             <>
               <View style={styles.profileSection}>
                 <View style={styles.profileHeader}>
-                  {profileImage ? (
-                    <Image 
-                      source={{ uri: profileImage }} 
-                      style={styles.profileImage} 
-                    />
-                  ) : (
-                    <View style={[styles.profileImagePlaceholder, { backgroundColor: theme.card }]}>
-                      <Text style={[styles.profileImageText, { color: theme.primary }]}>
-                        {displayName.charAt(0).toUpperCase()}
-                      </Text>
-                    </View>
-                  )}
+                  <Image 
+                    source={profileImage ? { uri: profileImage } : require('../../assets/default-avatar.png')} 
+                    style={styles.profileImage}
+                  />
                   
                   <View style={styles.statsContainer}>
                     <View style={styles.statItem}>
@@ -437,8 +443,13 @@ export default function UserProfileScreen() {
                     </View>
                     
                     <View style={styles.statItem}>
-                      <Text style={[styles.statNumber, { color: theme.text }]}>0</Text>
+                      <Text style={[styles.statNumber, { color: theme.text }]}>{friendsCount}</Text>
                       <Text style={[styles.statLabel, { color: theme.text + '80' }]}>Friends</Text>
+                    </View>
+                    
+                    <View style={styles.statItem}>
+                      <Text style={[styles.statNumber, { color: theme.text }]}>{attendingCount}</Text>
+                      <Text style={[styles.statLabel, { color: theme.text + '80' }]}>Attending</Text>
                     </View>
                   </View>
                 </View>

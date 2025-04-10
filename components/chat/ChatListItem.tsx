@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, Pressable, Image } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Image, TouchableOpacity } from 'react-native';
 import { useTheme } from '../../context/theme.context';
 import { Chat } from '../../services/messages.service';
 import { useState, useEffect } from 'react';
@@ -6,6 +6,7 @@ import { UserService } from '../../services/user.service';
 import { auth } from '../../config/firebase';
 import { Ionicons } from '@expo/vector-icons';
 import { format } from 'date-fns';
+import { useRouter } from 'expo-router';
 
 interface ChatListItemProps {
   chat: Chat;
@@ -15,26 +16,42 @@ interface ChatListItemProps {
 export const ChatListItem: React.FC<ChatListItemProps> = ({ chat, onPress }) => {
   const { theme } = useTheme();
   const [otherUser, setOtherUser] = useState<any>(null);
+  const router = useRouter();
+  const [otherUserId, setOtherUserId] = useState<string | null>(null);
+  
+  // Calculate unread count for current user
+  const unreadCount = auth.currentUser && chat.unreadCounts ? 
+    chat.unreadCounts[auth.currentUser.uid] || 0 : 0;
 
   useEffect(() => {
-    const otherUserId = chat.participants.find(id => id !== auth.currentUser?.uid);
-    if (otherUserId) {
-      UserService.getUser(otherUserId).then(setOtherUser);
+    const userId = chat.participants.find(id => id !== auth.currentUser?.uid);
+    if (userId) {
+      setOtherUserId(userId);
+      UserService.getUser(userId).then(setOtherUser);
     }
   }, [chat]);
+
+  const handleProfilePress = (e: any) => {
+    e.stopPropagation(); // Prevent triggering the chat press
+    if (otherUserId) {
+      router.push(`/profile/${otherUserId}`);
+    }
+  };
 
   return (
     <Pressable 
       style={[styles.container, { backgroundColor: theme.card }]}
       onPress={onPress}
     >
-      {otherUser?.photoURL ? (
-        <Image source={{ uri: otherUser.photoURL }} style={styles.avatar} />
-      ) : (
-        <View style={[styles.avatarPlaceholder, { backgroundColor: theme.border }]}>
-          <Ionicons name="person" size={24} color={theme.text} />
-        </View>
-      )}
+      <TouchableOpacity onPress={handleProfilePress}>
+        {otherUser?.photoURL ? (
+          <Image source={{ uri: otherUser.photoURL }} style={styles.avatar} />
+        ) : (
+          <View style={[styles.avatarPlaceholder, { backgroundColor: theme.border }]}>
+            <Ionicons name="person" size={24} color={theme.text} />
+          </View>
+        )}
+      </TouchableOpacity>
       
       <View style={styles.content}>
         <Text style={[styles.name, { color: theme.text }]}>
@@ -54,9 +71,9 @@ export const ChatListItem: React.FC<ChatListItemProps> = ({ chat, onPress }) => 
             {format(chat.lastMessageDate.toDate(), 'HH:mm')} </Text>
         )}
 
-        {chat.unreadCount > 0 && (
+        {unreadCount > 0 && (
           <View style={[styles.badge, { backgroundColor: theme.primary }]}>
-            <Text style={styles.badgeText}>{chat.unreadCount}</Text>
+            <Text style={styles.badgeText}>{unreadCount}</Text>
           </View>
         )}
       </View>

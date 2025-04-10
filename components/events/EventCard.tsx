@@ -33,6 +33,17 @@ const formatDuration = (minutes: number): string => {
   return result.trim();
 };
 
+// Add this function near the top of the file
+const isValidImageUrl = (url: string | null | undefined): boolean => {
+  if (!url) return false;
+  // Check for common URL patterns and ensure it's not an empty string
+  return url.trim().length > 0 && 
+         (url.startsWith('http://') || 
+          url.startsWith('https://') || 
+          url.startsWith('gs://') ||
+          url.startsWith('data:image/'));
+};
+
 export const EventCard: React.FC<EventCardProps> = ({ event, onPress }) => {
   const { theme, isDark } = useTheme();
   const router = useRouter();
@@ -123,10 +134,22 @@ export const EventCard: React.FC<EventCardProps> = ({ event, onPress }) => {
     try {
       setIsJoining(true);
       
+      // Fetch the latest user data to ensure we have their current photo
+      let photoURL = user.photoURL;
+      try {
+        const userData = await UserService.getUser(user.id);
+        if (userData && userData.photoURL) {
+          photoURL = userData.photoURL;
+        }
+      } catch (error) {
+        console.error("Error fetching updated user photo:", error);
+        // Continue with join request even if we couldn't get the photo
+      }
+      
       const newParticipant: Participant = {
         id: user.id,
         name: user.displayName || 'Anonymous User',
-        photoURL: user.photoURL || null,
+        photoURL: photoURL || null,
         type: ParticipantType.USER,
         status: AttendeeStatus.PENDING
       };
@@ -279,10 +302,11 @@ export const EventCard: React.FC<EventCardProps> = ({ event, onPress }) => {
             style={styles.creatorContainer}
             onPress={() => creator?.id && router.push(`/profile/${creator.id}`)}
           >
-            {creator?.photoURL ? (
+            {isValidImageUrl(creator?.photoURL) ? (
               <Image 
-                source={{ uri: creator.photoURL }} 
+                source={{ uri: creator!.photoURL as string }} 
                 style={styles.creatorImage} 
+                defaultSource={require('../../assets/default-avatar.png')}
               />
             ) : (
               <View style={[styles.creatorInitials, { backgroundColor: theme.primary + '20' }]}>

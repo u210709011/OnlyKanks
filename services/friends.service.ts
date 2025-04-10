@@ -280,4 +280,39 @@ export class FriendsService {
     // Delete the request
     await deleteDoc(requestRef);
   }
+
+  // Get friends count for a specific user
+  static async getFriendsCount(userId: string): Promise<number> {
+    try {
+      // First try with a direct query
+      const friendsRef = collection(db, collections.FRIENDS);
+      const q = query(
+        friendsRef,
+        where('userId', '==', userId)
+      );
+
+      try {
+        const querySnapshot = await getDocs(q);
+        return querySnapshot.size;
+      } catch (error) {
+        // If direct query fails, try a different approach
+        console.error('Direct friend count query failed:', error);
+        
+        // Get all friends (this might be allowed by rules)
+        const allFriendsQuery = query(friendsRef);
+        const allFriendsSnapshot = await getDocs(allFriendsQuery);
+        
+        // Filter in memory
+        const userFriends = allFriendsSnapshot.docs.filter(
+          doc => doc.data().userId === userId
+        );
+        
+        return userFriends.length;
+      }
+    } catch (error) {
+      console.error('Error counting friends:', error);
+      // Return 0 as a fallback to avoid breaking the UI
+      return 0;
+    }
+  }
 } 

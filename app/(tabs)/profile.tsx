@@ -6,10 +6,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { auth, db } from '../../config/firebase';
 import { collection, query, where, getDocs } from 'firebase/firestore';
-import { Event } from '../../services/events.service';
+import { Event, EventsService } from '../../services/events.service';
 import { UserService } from '../../services/user.service';
 import { EventCard } from '../../components/events/EventCard';
 import { useFocusEffect } from '@react-navigation/native';
+import { FriendsService } from '../../services/friends.service';
 
 const { width } = Dimensions.get('window');
 const GRID_SPACING = 2;
@@ -51,6 +52,36 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  headerButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  iconButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 8,
+  },
+  badge: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#5C6BC0',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+  badgeText: {
+    color: 'white',
+    fontSize: 10,
+    fontWeight: 'bold',
+    fontFamily: 'Roboto',
   },
   profileSection: {
     padding: 16,
@@ -283,6 +314,8 @@ export default function ProfileScreen() {
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const [userBio, setUserBio] = useState<string>('');
   const [userEvents, setUserEvents] = useState<Event[]>([]);
+  const [friendsCount, setFriendsCount] = useState<number>(0);
+  const [attendingCount, setAttendingCount] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
@@ -336,6 +369,22 @@ export default function ProfileScreen() {
       } catch (error) {
         console.error('Error fetching user events:', error);
       }
+      
+      // Fetch friends count
+      try {
+        const count = await FriendsService.getFriendsCount(currentUserId);
+        setFriendsCount(count);
+      } catch (error) {
+        console.error('Error fetching friends count:', error);
+      }
+      
+      // Fetch attended events count
+      try {
+        const count = await EventsService.getAttendingEventsCount(currentUserId);
+        setAttendingCount(count);
+      } catch (error) {
+        console.error('Error fetching attending events count:', error);
+      }
     } catch (error) {
       console.error('Error fetching user profile:', error);
       setError('Error loading profile');
@@ -388,7 +437,7 @@ export default function ProfileScreen() {
         <View style={{ width: 40 }} />
         <Text style={[styles.username, { color: theme.text }]}>{auth.currentUser?.displayName}</Text>
         <TouchableOpacity
-          style={styles.settingsButton}
+          style={styles.iconButton}
           onPress={() => router.push('/settings')}
         >
           <Ionicons name="settings-outline" size={24} color={theme.text} />
@@ -449,12 +498,12 @@ export default function ProfileScreen() {
                     </View>
                     
                     <View style={styles.statItem}>
-                      <Text style={[styles.statNumber, { color: theme.text }]}>142</Text>
+                      <Text style={[styles.statNumber, { color: theme.text }]}>{friendsCount}</Text>
                       <Text style={[styles.statLabel, { color: theme.text + '80' }]}>Friends</Text>
                     </View>
                     
                     <View style={styles.statItem}>
-                      <Text style={[styles.statNumber, { color: theme.text }]}>38</Text>
+                      <Text style={[styles.statNumber, { color: theme.text }]}>{attendingCount}</Text>
                       <Text style={[styles.statLabel, { color: theme.text + '80' }]}>Attending</Text>
                     </View>
                   </View>
@@ -563,12 +612,12 @@ export default function ProfileScreen() {
                     </View>
                     
                     <View style={styles.statItem}>
-                      <Text style={[styles.statNumber, { color: theme.text }]}>142</Text>
+                      <Text style={[styles.statNumber, { color: theme.text }]}>{friendsCount}</Text>
                       <Text style={[styles.statLabel, { color: theme.text + '80' }]}>Friends</Text>
                     </View>
                     
                     <View style={styles.statItem}>
-                      <Text style={[styles.statNumber, { color: theme.text }]}>38</Text>
+                      <Text style={[styles.statNumber, { color: theme.text }]}>{attendingCount}</Text>
                       <Text style={[styles.statLabel, { color: theme.text + '80' }]}>Attending</Text>
                     </View>
                   </View>

@@ -49,6 +49,17 @@ interface LocationWithDetails {
   };
 }
 
+// Add this function near the top of the file
+const isValidImageUrl = (url: string | null | undefined): boolean => {
+  if (!url) return false;
+  // Check for common URL patterns and ensure it's not an empty string
+  return url.trim().length > 0 && 
+         (url.startsWith('http://') || 
+          url.startsWith('https://') || 
+          url.startsWith('gs://') ||
+          url.startsWith('data:image/'));
+};
+
 export default function CreateEventScreen(): React.ReactElement {
   const { theme, isDark } = useTheme();
   const insets = useSafeAreaInsets();
@@ -511,8 +522,12 @@ export default function CreateEventScreen(): React.ReactElement {
           }}
           disabled={!isUser || item.id.startsWith('friend-')}
         >
-          {item.photoURL ? (
-            <Image source={{ uri: item.photoURL }} style={styles.participantImage} />
+          {isValidImageUrl(item.photoURL) ? (
+            <Image 
+              source={{ uri: item.photoURL as string }} 
+              style={styles.participantImage}
+              defaultSource={require('../../assets/default-avatar.png')}
+            />
           ) : (
             <View style={[styles.defaultAvatar, { backgroundColor: theme.primary + '30' }]}>
               <Text style={{ color: theme.primary, fontWeight: 'bold' }}>
@@ -568,8 +583,12 @@ export default function CreateEventScreen(): React.ReactElement {
   const renderFriendToInvite = ({ item }: { item: any }) => (
     <View style={[styles.participantItem, { backgroundColor: theme.card }]}>
       <View style={styles.participantInfo}>
-        {item.photoURL ? (
-          <Image source={{ uri: item.photoURL }} style={styles.participantImage} />
+        {isValidImageUrl(item.photoURL) ? (
+          <Image 
+            source={{ uri: item.photoURL }} 
+            style={styles.participantImage}
+            defaultSource={require('../../assets/default-avatar.png')}
+          />
         ) : (
           <View style={[styles.defaultAvatar, { backgroundColor: theme.primary + '30' }]}>
             <Text style={{ color: theme.primary, fontWeight: 'bold' }}>
@@ -1224,8 +1243,12 @@ export default function CreateEventScreen(): React.ReactElement {
                         style={[styles.friendItem, { backgroundColor: theme.background }]}
                         onPress={() => handleSelectFriend(item)}
                       >
-                        {item.photoURL ? (
-                          <Image source={{ uri: item.photoURL }} style={styles.friendImage} />
+                        {isValidImageUrl(item.photoURL) ? (
+                          <Image 
+                            source={{ uri: item.photoURL }}
+                            style={styles.friendImage}
+                            defaultSource={require('../../assets/default-avatar.png')}
+                          />
                         ) : (
                           <View style={[styles.friendImagePlaceholder, { backgroundColor: theme.primary + '30' }]}>
                             <Text style={{ color: theme.primary }}>

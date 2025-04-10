@@ -48,6 +48,17 @@ const formatDuration = (minutes: number): string => {
   return result.trim();
 };
 
+// Add this function near the top of the file
+const isValidImageUrl = (url: string | null | undefined): boolean => {
+  if (!url) return false;
+  // Check for common URL patterns and ensure it's not an empty string
+  return url.trim().length > 0 && 
+         (url.startsWith('http://') || 
+          url.startsWith('https://') || 
+          url.startsWith('gs://') ||
+          url.startsWith('data:image/'));
+};
+
 export default function EventScreen() {
   const { id } = useLocalSearchParams();
   const [event, setEvent] = useState<Event | null>(null);
@@ -63,6 +74,7 @@ export default function EventScreen() {
   const [editParticipantName, setEditParticipantName] = useState('');
   const [showEditModal, setShowEditModal] = useState(false);
   const [isExpired, setIsExpired] = useState(false);
+  const [userPhotoMap, setUserPhotoMap] = useState<{[key: string]: string | null}>({});
 
   // Check if current user is the event creator
   const isEventCreator = user && event && user.id === event.createdBy;
@@ -84,6 +96,41 @@ export default function EventScreen() {
   useEffect(() => {
     fetchEventData();
   }, [id]);
+
+  // New effect to fetch real user photos for participants
+  useEffect(() => {
+    if (!event || !event.participants) return;
+    
+    const fetchUserPhotos = async () => {
+      // Only fetch for user participants without photos
+      const userIdsToFetch = event.participants!
+        .filter(p => p && p.type === ParticipantType.USER && !p.photoURL && !p.id.startsWith('friend-') && !p.id.startsWith('non-user-'))
+        .map(p => p.id);
+      
+      if (userIdsToFetch.length === 0) return;
+      
+      const photoMap: {[key: string]: string | null} = {};
+      
+      // Fetch user data to get real photos
+      await Promise.all(
+        userIdsToFetch.map(async (userId) => {
+          try {
+            const userData = await UserService.getUser(userId);
+            if (userData?.photoURL) {
+              photoMap[userId] = userData.photoURL;
+              console.log(`Found photo for user ${userId}: ${userData.photoURL}`);
+            }
+          } catch (error) {
+            console.error(`Error fetching photo for user ${userId}:`, error);
+          }
+        })
+      );
+      
+      setUserPhotoMap(photoMap);
+    };
+    
+    fetchUserPhotos();
+  }, [event?.participants]);
 
   const fetchEventData = async () => {
     try {
@@ -229,23 +276,46 @@ export default function EventScreen() {
 
   const renderParticipantItem = ({ item }: { item: Participant }) => {
     const isCreator = item.id === event?.createdBy;
-    const canEdit = isEventCreator && item.type === ParticipantType.NON_USER;
     const isUser = item.type === ParticipantType.USER;
+    const isRealUser = isUser && !item.id.startsWith('friend-') && !item.id.startsWith('non-user-');
+    const canEdit = isEventCreator && !isCreator;
+    
+    // Get photo from map if available
+    const photoURL = item.photoURL || (isRealUser ? userPhotoMap[item.id] : null);
+    
+    // Debug photoURL
+    console.log('Participant data:', JSON.stringify({
+      id: item.id,
+      name: item.name,
+      type: item.type,
+      hasPhotoURL: !!item.photoURL,
+      photoURL: item.photoURL,
+      hasMapPhoto: !!userPhotoMap[item.id],
+      mapPhoto: userPhotoMap[item.id],
+      finalPhoto: photoURL,
+      isValid: isValidImageUrl(photoURL)
+    }));
     
     return (
+      
       <View style={[styles.participantItem, { backgroundColor: theme.card }]}>
         <TouchableOpacity 
           style={styles.participantInfo}
           onPress={() => {
-            // Only navigate to profile for real users (not for generated test users)
-            if (isUser && !item.id.startsWith('friend-') && !item.id.startsWith('non-user-')) {
+            // Only navigate to profile for real users
+            if (isRealUser) {
               router.push(`/profile/${item.id}`);
             }
           }}
-          disabled={!isUser || item.id.startsWith('friend-') || item.id.startsWith('non-user-')}
+          disabled={!isRealUser}
         >
-          {item.photoURL ? (
-            <Image source={{ uri: item.photoURL }} style={styles.participantImage} />
+          
+          {isValidImageUrl(photoURL) ? (
+            <Image 
+              source={{ uri: photoURL as string }} 
+              style={styles.participantImage}
+              defaultSource={require('../../assets/default-avatar.png')}
+            />
           ) : (
             <View style={[styles.participantInitials, { backgroundColor: theme.primary + '20' }]}>
               <Text style={{ color: theme.primary, fontWeight: 'bold' }}>
@@ -276,11 +346,30 @@ export default function EventScreen() {
   };
 
   const renderPendingRequestItem = ({ item }: { item: Participant }) => {
+    const isUser = item.type === ParticipantType.USER;
+    const isRealUser = isUser && !item.id.startsWith('friend-') && !item.id.startsWith('non-user-');
+    
+    // Get photo from map if available
+    const photoURL = item.photoURL || (isRealUser ? userPhotoMap[item.id] : null);
+    
     return (
       <View style={[styles.requestItem, { backgroundColor: theme.card }]}>
-        <View style={styles.participantInfo}>
-          {item.photoURL ? (
-            <Image source={{ uri: item.photoURL }} style={styles.participantImage} />
+        <TouchableOpacity 
+          style={styles.participantInfo}
+          onPress={() => {
+            // Only navigate to profile for real users (not for generated test users)
+            if (isRealUser) {
+              router.push(`/profile/${item.id}`);
+            }
+          }}
+          disabled={!isRealUser}
+        >
+          {isValidImageUrl(photoURL) ? (
+            <Image 
+              source={{ uri: photoURL as string }} 
+              style={styles.participantImage}
+              defaultSource={require('../../assets/default-avatar.png')}
+            />
           ) : (
             <View style={[styles.participantInitials, { backgroundColor: theme.primary + '20' }]}>
               <Text style={{ color: theme.primary, fontWeight: 'bold' }}>
@@ -291,7 +380,7 @@ export default function EventScreen() {
           <Text style={[styles.participantName, { color: theme.text }]}>
             {item.name}
           </Text>
-        </View>
+        </TouchableOpacity>
         
         <View style={styles.requestActions}>
           <TouchableOpacity 
@@ -375,10 +464,19 @@ export default function EventScreen() {
             style={styles.creatorContainer}
             onPress={() => event.createdBy && router.push(`/profile/${event.createdBy}`)}
           >
-            <Image 
-              source={creator?.photoURL ? { uri: creator.photoURL } : require('../../assets/default-avatar.png')} 
-              style={styles.creatorImage} 
-            />
+            {creator && isValidImageUrl(creator.photoURL) ? (
+              <Image 
+                source={{ uri: creator.photoURL as string }} 
+                style={styles.creatorImage}
+                defaultSource={require('../../assets/default-avatar.png')}
+              />
+            ) : (
+              <View style={[styles.creatorInitials, { backgroundColor: theme.primary + '20' }]}>
+                <Text style={{ color: theme.primary, fontWeight: 'bold' }}>
+                  {creator?.displayName ? creator.displayName.substring(0, 2).toUpperCase() : '?'}
+                </Text>
+              </View>
+            )}
             <Text style={[styles.creatorName, { color: theme.text }]}>
               By {creator?.displayName || 'Unknown User'}
             </Text>
@@ -447,10 +545,22 @@ export default function EventScreen() {
                     try {
                       setIsUpdating(true);
                       
+                      // Fetch the latest user data to ensure we have their current photo
+                      let photoURL = user.photoURL;
+                      try {
+                        const userData = await UserService.getUser(user.id);
+                        if (userData && userData.photoURL) {
+                          photoURL = userData.photoURL;
+                        }
+                      } catch (error) {
+                        console.error("Error fetching updated user photo:", error);
+                        // Continue with join request even if we couldn't get the photo
+                      }
+                      
                       const newParticipant: Participant = {
                         id: user.id,
                         name: user.displayName || 'Anonymous User',
-                        photoURL: user.photoURL || null,
+                        photoURL: photoURL || null,
                         type: ParticipantType.USER,
                         status: AttendeeStatus.PENDING
                       };
@@ -925,6 +1035,13 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: 'Roboto',
     lineHeight: 18,
+  },
+  creatorInitials: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
 

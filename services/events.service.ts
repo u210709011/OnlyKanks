@@ -4,6 +4,7 @@ import { collection, query, where, getDocs, GeoPoint, orderBy, Timestamp, server
 import { db } from '../config/firebase';
 import uuid from 'react-native-uuid';
 import { startOfDay, endOfDay, isAfter, isBefore, isEqual } from 'date-fns';
+import { UserService } from './user.service';
 
 export enum ParticipantType {
   USER = 'user',
@@ -300,6 +301,18 @@ export class EventsService {
         status: AttendeeStatus.INVITED
       };
       
+      // Try to get user data to update name and photo
+      try {
+        const userDoc = await getDoc(doc(db, collections.USERS, userId));
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+          newParticipant.name = userData.displayName || 'Invited User';
+          newParticipant.photoURL = userData.photoURL || null;
+        }
+      } catch (e) {
+        console.log('Error fetching invited user data:', e);
+      }
+      
       // Update the event with the new invited participant
       await updateDoc(doc(db, collections.EVENTS, eventId), {
         participants: [...participants, newParticipant]
@@ -382,6 +395,201 @@ export class EventsService {
     } catch (error) {
       console.error('Error responding to invitation:', error);
       throw error;
+    }
+  }
+
+  // Get events created by the current user that have pending join requests
+  static async getEventsWithPendingRequests(): Promise<Event[]> {
+    if (!auth.currentUser) throw new Error('User not authenticated');
+    
+    // Get all events created by the current user
+    const events = await this.getUserEvents(auth.currentUser.uid);
+    
+    // Filter to only include events with pending requests
+    return events.filter(event => 
+      event.participants?.some(participant => 
+        participant.status === AttendeeStatus.PENDING
+      )
+    );
+  }
+
+  // Count pending requests for a specific event
+  static countPendingRequests(event: Event): number {
+    return event.participants?.filter(
+      participant => participant.status === AttendeeStatus.PENDING
+    ).length || 0;
+  }
+  
+  // Accept a user's request to join an event
+  static async acceptEventRequest(eventId: string, participantId: string): Promise<void> {
+    if (!auth.currentUser) throw new Error('User not authenticated');
+    
+    const eventRef = doc(db, collections.EVENTS, eventId);
+    const eventDoc = await getDoc(eventRef);
+    
+    if (!eventDoc.exists()) {
+      throw new Error('Event not found');
+    }
+    
+    const eventData = eventDoc.data() as Event;
+    
+    // Verify that the current user is the event creator
+    if (eventData.createdBy !== auth.currentUser.uid) {
+      throw new Error('Only the event creator can accept join requests');
+    }
+    
+    // Find the participant with pending status
+    const participants = eventData.participants || [];
+    const participantIndex = participants.findIndex(
+      p => p.id === participantId && p.status === AttendeeStatus.PENDING
+    );
+    
+    if (participantIndex === -1) {
+      throw new Error('Pending request not found');
+    }
+    
+    // Get the latest user data to ensure we have their current photo
+    try {
+      const userData = await UserService.getUser(participantId);
+      if (userData && userData.photoURL) {
+        // Update the participant's photo URL if available
+        participants[participantIndex].photoURL = userData.photoURL;
+      }
+    } catch (error) {
+      console.error("Error fetching user data for photo URL:", error);
+      // Continue with the process even if we couldn't get the photo
+    }
+    
+    // Update the participant status
+    participants[participantIndex].status = AttendeeStatus.ACCEPTED;
+    
+    // Update the event document
+    await updateDoc(eventRef, {
+      participants: participants
+    });
+  }
+  
+  // Reject a user's request to join an event
+  static async rejectEventRequest(eventId: string, participantId: string): Promise<void> {
+    if (!auth.currentUser) throw new Error('User not authenticated');
+    
+    const eventRef = doc(db, collections.EVENTS, eventId);
+    const eventDoc = await getDoc(eventRef);
+    
+    if (!eventDoc.exists()) {
+      throw new Error('Event not found');
+    }
+    
+    const eventData = eventDoc.data() as Event;
+    
+    // Verify that the current user is the event creator
+    if (eventData.createdBy !== auth.currentUser.uid) {
+      throw new Error('Only the event creator can reject join requests');
+    }
+    
+    // Find the participant with pending status
+    const participants = eventData.participants || [];
+    const participantIndex = participants.findIndex(
+      p => p.id === participantId && p.status === AttendeeStatus.PENDING
+    );
+    
+    if (participantIndex === -1) {
+      throw new Error('Pending request not found');
+    }
+    
+    // Remove the participant from the list
+    participants.splice(participantIndex, 1);
+    
+    // Update the event document
+    await updateDoc(eventRef, {
+      participants: participants
+    });
+  }
+
+  // Get events that a user is attending (but not created by them)
+  static async getEventsAttending(userId: string): Promise<Event[]> {
+    try {
+      // Get all events
+      const eventsRef = collection(db, collections.EVENTS);
+      const querySnapshot = await getDocs(eventsRef);
+      
+      const now = new Date();
+      const todayStart = startOfDay(now);
+      
+      // Filter for events where the user is a participant with ACCEPTED status
+      // but not the creator of the event
+      const attendingEvents = querySnapshot.docs
+        .map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }) as Event)
+        .filter(event => {
+          // Skip past events
+          const eventDate = event.date.toDate();
+          if (eventDate < todayStart) return false;
+          
+          // Skip events created by the user
+          if (event.createdBy === userId) return false;
+          
+          // Check if user is a participant
+          return event.participants?.some(
+            p => p.id === userId && 
+            p.type === ParticipantType.USER && 
+            (p.status === AttendeeStatus.ACCEPTED || p.status === undefined)
+          );
+        });
+      
+      return attendingEvents;
+    } catch (error) {
+      console.error('Error fetching events attending:', error);
+      return [];
+    }
+  }
+  
+  // Count events a user is attending
+  static async getAttendingEventsCount(userId: string): Promise<number> {
+    try {
+      // First try with the optimized method
+      try {
+        const attendingEvents = await this.getEventsAttending(userId);
+        return attendingEvents.length;
+      } catch (error) {
+        console.error('Optimized attending events query failed:', error);
+        
+        // Fallback approach: get all events and filter in memory
+        const eventsRef = collection(db, collections.EVENTS);
+        const allEventsSnapshot = await getDocs(eventsRef);
+        
+        const now = new Date();
+        const todayStart = startOfDay(now);
+        
+        const attendingEvents = allEventsSnapshot.docs
+          .map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }) as Event)
+          .filter(event => {
+            // Skip past events
+            const eventDate = event.date.toDate ? event.date.toDate() : new Date(event.date);
+            if (eventDate < todayStart) return false;
+            
+            // Skip events created by the user
+            if (event.createdBy === userId) return false;
+            
+            // Check if user is a participant
+            return event.participants?.some(
+              p => p.id === userId && 
+              p.type === ParticipantType.USER && 
+              (p.status === AttendeeStatus.ACCEPTED || p.status === undefined)
+            );
+          });
+        
+        return attendingEvents.length;
+      }
+    } catch (error) {
+      console.error('Error counting attending events:', error);
+      // Return 0 as a fallback to avoid breaking the UI
+      return 0;
     }
   }
 } 
