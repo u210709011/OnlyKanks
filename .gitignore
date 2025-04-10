@@ -79,4 +79,4 @@ firebaserc
 .metro-health-check*
 
 # Specific to your project
-# Add any other files/directories specific to your project that shouldn't be committed
+# Add any other files/directories specific to your project that shouldn't be committed.env
