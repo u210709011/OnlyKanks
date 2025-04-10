@@ -111,6 +111,10 @@ A feature-rich mobile application for creating, discovering, and managing events
    ```bash
    npx expo start
    ```
+   In case you have a problem with starting the development server:
+   ```
+   npx expo start --tunnel
+   ```
 
 5. Use the Expo Go app on your mobile device or an emulator to run the application
 
