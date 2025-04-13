@@ -177,6 +177,12 @@ export default function EventScreen() {
 
   const handleParticipantAction = async (participant: Participant, action: 'accept' | 'reject' | 'edit') => {
     if (!event) return;
+    
+    // Prevent actions on expired events
+    if (isExpired && action !== 'edit') {
+      Alert.alert('Event Ended', 'You cannot modify participants for events that have already ended.');
+      return;
+    }
 
     if (action === 'edit') {
       setSelectedParticipant(participant);
@@ -384,17 +390,27 @@ export default function EventScreen() {
         
         <View style={styles.requestActions}>
           <TouchableOpacity 
-            style={[styles.actionButton, styles.acceptButton, { backgroundColor: theme.primary }]}
+            style={[
+              styles.actionButton, 
+              styles.acceptButton, 
+              { backgroundColor: theme.primary },
+              isExpired && { backgroundColor: theme.primary + '60' }
+            ]}
             onPress={() => handleParticipantAction(item, 'accept')}
-            disabled={isUpdating}
+            disabled={isUpdating || isExpired}
           >
             <Ionicons name="checkmark" size={18} color="white" />
           </TouchableOpacity>
           
           <TouchableOpacity 
-            style={[styles.actionButton, styles.rejectButton, { backgroundColor: theme.error }]}
+            style={[
+              styles.actionButton, 
+              styles.rejectButton, 
+              { backgroundColor: theme.error },
+              isExpired && { backgroundColor: theme.error + '60' }
+            ]}
             onPress={() => handleParticipantAction(item, 'reject')}
-            disabled={isUpdating}
+            disabled={isUpdating || isExpired}
           >
             <Ionicons name="close" size={18} color="white" />
           </TouchableOpacity>
@@ -533,7 +549,7 @@ export default function EventScreen() {
               <Text style={[styles.infoText, { color: isExpired ? theme.text + '60' : theme.text }]}>
                 {acceptedParticipants.length}/{event.capacity || '∞'} participants
               </Text>
-              {event.capacity && acceptedParticipants.length < event.capacity && !isEventCreator && !userParticipant && (
+              {event.capacity && acceptedParticipants.length < event.capacity && !isEventCreator && !userParticipant && !isExpired && (
                 <TouchableOpacity 
                   style={[styles.joinButton, { backgroundColor: theme.primary }]}
                   onPress={async () => {

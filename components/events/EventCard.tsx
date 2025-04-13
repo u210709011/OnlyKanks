@@ -51,6 +51,7 @@ export const EventCard: React.FC<EventCardProps> = ({ event, onPress }) => {
   const [creator, setCreator] = useState<any>(null);
   const [isPressed, setIsPressed] = useState(false);
   const [isJoinRequested, setIsJoinRequested] = useState(false);
+  const [isParticipating, setIsParticipating] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
   const [isExpired, setIsExpired] = useState(false);
 
@@ -99,7 +100,13 @@ export const EventCard: React.FC<EventCardProps> = ({ event, onPress }) => {
         p => p.id === user.id && p.type === ParticipantType.USER
       );
       if (userParticipant) {
-        setIsJoinRequested(true);
+        if (userParticipant.status === AttendeeStatus.ACCEPTED || 
+            userParticipant.status === undefined || // For backward compatibility 
+            userParticipant.id === event.createdBy) {
+          setIsParticipating(true);
+        } else {
+          setIsJoinRequested(true);
+        }
       }
     }
   }, [event.createdBy, event.participants, user, event.date, event.duration]);
@@ -333,13 +340,16 @@ export const EventCard: React.FC<EventCardProps> = ({ event, onPress }) => {
                 style={[
                   styles.joinButton, 
                   { 
-                    backgroundColor: isJoinRequested 
-                      ? theme.primary + '30' 
-                      : theme.primary 
+                    backgroundColor: isParticipating 
+                      ? theme.primary 
+                      : isJoinRequested 
+                        ? theme.primary + '30' 
+                        : theme.primary,
+                    display: isExpired ? 'none' : 'flex'
                   }
                 ]}
                 onPress={requestToJoin}
-                disabled={isJoinRequested || isJoining}
+                disabled={isJoinRequested || isParticipating || isJoining || isExpired}
               >
                 <Text style={[
                   styles.joinButtonText, 
@@ -347,7 +357,10 @@ export const EventCard: React.FC<EventCardProps> = ({ event, onPress }) => {
                     color: isJoinRequested ? theme.primary : 'white'
                   }
                 ]}>
-                  {isJoining ? 'Sending...' : (isJoinRequested ? 'Requested' : 'Join')}
+                  {isJoining ? 'Sending...' : (
+                    isParticipating ? 'Participating' :
+                    isJoinRequested ? 'Requested' : 'Join'
+                  )}
                 </Text>
               </TouchableOpacity>
             )}
