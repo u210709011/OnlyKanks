@@ -727,7 +727,20 @@ export default function CreateEventScreen(): React.ReactElement {
                 placeholder="0"
                 placeholderTextColor={theme.text + '60'}
                 value={durationDays}
-                onChangeText={setDurationDays}
+                onChangeText={(text) => {
+                  // If text is empty, set to '0'
+                  if (text.trim() === '') {
+                    setDurationDays('0');
+                  } 
+                  // If text starts with '0' and has more digits, remove the leading zero
+                  else if (text.startsWith('0') && text.length > 1) {
+                    setDurationDays(text.substring(1));
+                  } 
+                  // Otherwise use the text as is
+                  else {
+                    setDurationDays(text);
+                  }
+                }}
               />
               <Text style={[styles.durationLabel, { color: theme.text }]}>days</Text>
             </View>
@@ -739,7 +752,20 @@ export default function CreateEventScreen(): React.ReactElement {
                 placeholder="1"
                 placeholderTextColor={theme.text + '60'}
                 value={durationHours}
-                onChangeText={setDurationHours}
+                onChangeText={(text) => {
+                  // If text is empty, set to '0'
+                  if (text.trim() === '') {
+                    setDurationHours('0');
+                  } 
+                  // If text starts with '0' and has more digits, remove the leading zero
+                  else if (text.startsWith('0') && text.length > 1) {
+                    setDurationHours(text.substring(1));
+                  } 
+                  // Otherwise use the text as is
+                  else {
+                    setDurationHours(text);
+                  }
+                }}
               />
               <Text style={[styles.durationLabel, { color: theme.text }]}>hours</Text>
             </View>
@@ -751,7 +777,20 @@ export default function CreateEventScreen(): React.ReactElement {
                 placeholder="0"
                 placeholderTextColor={theme.text + '60'}
                 value={durationMinutes}
-                onChangeText={setDurationMinutes}
+                onChangeText={(text) => {
+                  // If text is empty, set to '0'
+                  if (text.trim() === '') {
+                    setDurationMinutes('0');
+                  } 
+                  // If text starts with '0' and has more digits, remove the leading zero
+                  else if (text.startsWith('0') && text.length > 1) {
+                    setDurationMinutes(text.substring(1));
+                  } 
+                  // Otherwise use the text as is
+                  else {
+                    setDurationMinutes(text);
+                  }
+                }}
               />
               <Text style={[styles.durationLabel, { color: theme.text }]}>minutes</Text>
             </View>

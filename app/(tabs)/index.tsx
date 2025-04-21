@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { View, StyleSheet, ActivityIndicator, RefreshControl, Text, SectionList, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, ActivityIndicator, RefreshControl, Text, SectionList, TouchableOpacity, ScrollView } from 'react-native';
 import { EventCard } from '../../components/events/EventCard';
 import { Event, EventsService, EventFilterOptions } from '../../services/events.service';
 import { useTheme } from '../../context/theme.context';
@@ -211,15 +211,26 @@ export default function ExploreScreen() {
       />
       
       {events.length === 0 && !loading ? (
-        <View style={[styles.emptyContainer, { marginTop: 80 }]}>
-          <Ionicons name="calendar-outline" size={64} color={theme.text + '30'} style={{ marginBottom: 16 }} />
-          <Text style={[styles.emptyText, { color: theme.text }]}>No events found</Text>
-          <Text style={[styles.emptySubtext, { color: theme.text + '80' }]}>
-            {filters.searchQuery ? 
-              "Try different search terms or filters" : 
-              "Try changing your location or filters"}
-          </Text>
-        </View>
+        <ScrollView
+          contentContainerStyle={styles.emptyScrollContainer}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={theme.text}
+            />
+          }
+        >
+          <View style={[styles.emptyContainer]}>
+            <Ionicons name="calendar-outline" size={64} color={theme.text + '30'} style={{ marginBottom: 16 }} />
+            <Text style={[styles.emptyText, { color: theme.text }]}>No events found</Text>
+            <Text style={[styles.emptySubtext, { color: theme.text + '80' }]}>
+              {filters.searchQuery ? 
+                "Try different search terms or filters" : 
+                "Try changing your location or filters"}
+            </Text>
+          </View>
+        </ScrollView>
       ) : (
         <SectionList
           sections={groupedEvents.map(group => ({
@@ -281,7 +292,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   emptyContainer: {
-    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 16,
@@ -308,5 +318,11 @@ const styles = StyleSheet.create({
     fontFamily: 'Roboto',
     textTransform: 'uppercase',
     letterSpacing: 1,
+  },
+  emptyScrollContainer: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    minHeight: '100%',
   },
 });
