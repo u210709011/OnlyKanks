@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { View, StyleSheet, ActivityIndicator, RefreshControl, Text, SectionList, TouchableOpacity, ScrollView } from 'react-native';
 import { EventCard } from '../../components/events/EventCard';
-import { Event, EventsService, EventFilterOptions } from '../../services/events.service';
+import { Event, EventsService, EventFilterOptions, AttendeeStatus, ParticipantType } from '../../services/events.service';
 import { useTheme } from '../../context/theme.context';
 import { EventFilters, FilterOptions, SortOption } from '../../components/events/EventFilters';
 import { LocationService } from '../../services/location.service';
@@ -74,6 +74,59 @@ export default function ExploreScreen() {
         case 'date-desc':
           sortedEvents.sort((a, b) => b.date.toDate().getTime() - a.date.toDate().getTime());
           break;
+        case 'upload-date-desc':
+          sortedEvents.sort((a, b) => {
+            // Use uploadDate if available, otherwise fall back to createdAt
+            const dateA = a.uploadDate ? a.uploadDate.toDate().getTime() : a.createdAt.toDate().getTime();
+            const dateB = b.uploadDate ? b.uploadDate.toDate().getTime() : b.createdAt.toDate().getTime();
+            return dateB - dateA; // Newest first
+          });
+          break;
+        case 'upload-date-asc':
+          sortedEvents.sort((a, b) => {
+            // Use uploadDate if available, otherwise fall back to createdAt
+            const dateA = a.uploadDate ? a.uploadDate.toDate().getTime() : a.createdAt.toDate().getTime();
+            const dateB = b.uploadDate ? b.uploadDate.toDate().getTime() : b.createdAt.toDate().getTime();
+            return dateA - dateB; // Oldest first
+          });
+          break;
+        case 'capacity-desc':
+          sortedEvents.sort((a, b) => {
+            // Sort by capacity (largest first)
+            // Use infinity for events with no capacity (unlimited)
+            const capacityA = a.capacity || Infinity;
+            const capacityB = b.capacity || Infinity;
+            
+            // If both are unlimited (infinity), sort by date
+            if (capacityA === Infinity && capacityB === Infinity) {
+              return a.date.toDate().getTime() - b.date.toDate().getTime();
+            }
+            
+            // Otherwise, sort by capacity
+            return capacityB - capacityA;
+          });
+          break;
+        case 'participants-desc':
+          sortedEvents.sort((a, b) => {
+            // Count accepted participants for each event
+            const acceptedA = (a.participants || []).filter(
+              p => (p.status === AttendeeStatus.ACCEPTED || 
+                   p.type === ParticipantType.NON_USER || 
+                   p.id === a.createdBy) && 
+                   p.status !== AttendeeStatus.INVITED
+            ).length;
+            
+            const acceptedB = (b.participants || []).filter(
+              p => (p.status === AttendeeStatus.ACCEPTED || 
+                   p.type === ParticipantType.NON_USER || 
+                   p.id === b.createdBy) && 
+                   p.status !== AttendeeStatus.INVITED
+            ).length;
+            
+            // Sort by number of participants (most first)
+            return acceptedB - acceptedA;
+          });
+          break;
         case 'distance':
           if (filters.locationCoords) {
             sortedEvents.sort((a, b) => {
@@ -95,7 +148,7 @@ export default function ExploreScreen() {
           break;
       }
       
-      // Only group by date if sorting by date
+      // Only group by date if sorting by date-asc or date-desc
       if (filters.sortBy === 'date-asc' || filters.sortBy === 'date-desc') {
         const grouped = EventsService.groupEventsByDate(sortedEvents);
         
@@ -107,7 +160,7 @@ export default function ExploreScreen() {
         
         setGroupedEvents(grouped);
       } else {
-        // For distance sorting, put all events in a single "section"
+        // For other sorting options, put all events in a single "section"
         setGroupedEvents([{ 
           date: new Date(), // Dummy date, won't be displayed
           events: sortedEvents 
@@ -162,9 +215,17 @@ export default function ExploreScreen() {
 
   // Format the date headers
   const formatSectionDate = (date: Date): string => {
-    // If sorting by distance, don't show date headers
+    // If not sorting by event date, show appropriate headers
     if (filters.sortBy === 'distance') {
-      return '';
+      return 'Events by distance';
+    } else if (filters.sortBy === 'upload-date-desc') {
+      return 'Recently Added Events';
+    } else if (filters.sortBy === 'upload-date-asc') {
+      return 'Events (Oldest Added First)';
+    } else if (filters.sortBy === 'capacity-desc') {
+      return 'Events by Capacity';
+    } else if (filters.sortBy === 'participants-desc') {
+      return 'Events by Popularity';
     }
     
     if (isToday(date)) {
@@ -240,13 +301,11 @@ export default function ExploreScreen() {
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => <EventCard event={item} />}
           renderSectionHeader={({ section: { title } }) => (
-            title ? (
-              <View style={[styles.sectionHeader, { backgroundColor: theme.background }]}>
-                <Text style={[styles.sectionHeaderText, { color: theme.text + '80' }]}>{title}</Text>
-              </View>
-            ) : null
+            <View style={[styles.sectionHeader, { backgroundColor: theme.background }]}>
+              <Text style={[styles.sectionHeaderText, { color: theme.text + '80' }]}>{title}</Text>
+            </View>
           )}
-          stickySectionHeadersEnabled={filters.sortBy !== 'distance'}
+          stickySectionHeadersEnabled={true}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}

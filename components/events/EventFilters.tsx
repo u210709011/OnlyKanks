@@ -29,7 +29,7 @@ const DISTANCE_RANGES = [
 ];
 
 // Add sorting options type
-export type SortOption = 'date-asc' | 'date-desc' | 'distance';
+export type SortOption = 'date-asc' | 'date-desc' | 'distance' | 'upload-date-desc' | 'upload-date-asc' | 'capacity-desc' | 'participants-desc';
 
 // Update FilterOptions to include sortBy
 export interface FilterOptions {
@@ -205,6 +205,14 @@ export const EventFilters: React.FC<EventFiltersProps> = ({
         return 'Date (Latest first)';
       case 'distance':
         return 'Distance (Nearest first)';
+      case 'upload-date-desc':
+        return 'Recently Added';
+      case 'upload-date-asc':
+        return 'Oldest Added';
+      case 'capacity-desc':
+        return 'Capacity (Largest first)';
+      case 'participants-desc':
+        return 'Popularity (Most attendees)';
       default:
         return 'Sort by';
     }
@@ -369,6 +377,94 @@ export const EventFilters: React.FC<EventFiltersProps> = ({
                   Distance (Nearest first)
                 </Text>
                 {filters.sortBy === 'distance' && (
+                  <Ionicons name="checkmark" size={20} color={theme.primary} />
+                )}
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={[
+                  styles.sortOption, 
+                  filters.sortBy === 'upload-date-desc' && { backgroundColor: theme.primary + '15' }
+                ]}
+                onPress={() => {
+                  handleFilterChange('sortBy', 'upload-date-desc');
+                  onFilterChange({ ...filters, sortBy: 'upload-date-desc' });
+                  setSortModalVisible(false);
+                }}
+              >
+                <Text style={[
+                  styles.sortOptionText, 
+                  { color: filters.sortBy === 'upload-date-desc' ? theme.primary : theme.text }
+                ]}>
+                  Recently Added
+                </Text>
+                {filters.sortBy === 'upload-date-desc' && (
+                  <Ionicons name="checkmark" size={20} color={theme.primary} />
+                )}
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={[
+                  styles.sortOption, 
+                  filters.sortBy === 'upload-date-asc' && { backgroundColor: theme.primary + '15' }
+                ]}
+                onPress={() => {
+                  handleFilterChange('sortBy', 'upload-date-asc');
+                  onFilterChange({ ...filters, sortBy: 'upload-date-asc' });
+                  setSortModalVisible(false);
+                }}
+              >
+                <Text style={[
+                  styles.sortOptionText, 
+                  { color: filters.sortBy === 'upload-date-asc' ? theme.primary : theme.text }
+                ]}>
+                  Oldest Added
+                </Text>
+                {filters.sortBy === 'upload-date-asc' && (
+                  <Ionicons name="checkmark" size={20} color={theme.primary} />
+                )}
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={[
+                  styles.sortOption, 
+                  filters.sortBy === 'capacity-desc' && { backgroundColor: theme.primary + '15' }
+                ]}
+                onPress={() => {
+                  handleFilterChange('sortBy', 'capacity-desc');
+                  onFilterChange({ ...filters, sortBy: 'capacity-desc' });
+                  setSortModalVisible(false);
+                }}
+              >
+                <Text style={[
+                  styles.sortOptionText, 
+                  { color: filters.sortBy === 'capacity-desc' ? theme.primary : theme.text }
+                ]}>
+                  Capacity (Largest first)
+                </Text>
+                {filters.sortBy === 'capacity-desc' && (
+                  <Ionicons name="checkmark" size={20} color={theme.primary} />
+                )}
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={[
+                  styles.sortOption, 
+                  filters.sortBy === 'participants-desc' && { backgroundColor: theme.primary + '15' }
+                ]}
+                onPress={() => {
+                  handleFilterChange('sortBy', 'participants-desc');
+                  onFilterChange({ ...filters, sortBy: 'participants-desc' });
+                  setSortModalVisible(false);
+                }}
+              >
+                <Text style={[
+                  styles.sortOptionText, 
+                  { color: filters.sortBy === 'participants-desc' ? theme.primary : theme.text }
+                ]}>
+                  Popularity (Most attendees)
+                </Text>
+                {filters.sortBy === 'participants-desc' && (
                   <Ionicons name="checkmark" size={20} color={theme.primary} />
                 )}
               </TouchableOpacity>
