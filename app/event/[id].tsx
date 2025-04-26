@@ -24,6 +24,7 @@ import { Event, Participant, ParticipantType, AttendeeStatus } from '../../servi
 import { UserService } from '../../services/user.service';
 import { useAuth } from '../../context/auth.context';
 import { CustomButton } from '../../components/shared/CustomButton';
+import { FriendsService } from '../../services/friends.service';
 
 // Define a type for creator data
 interface CreatorData {
@@ -75,6 +76,17 @@ export default function EventScreen() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [isExpired, setIsExpired] = useState(false);
   const [userPhotoMap, setUserPhotoMap] = useState<{[key: string]: string | null}>({});
+  
+  // State variables for adding participants
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [participantName, setParticipantName] = useState('');
+  const [addParticipantType, setAddParticipantType] = useState<ParticipantType>(ParticipantType.NON_USER);
+  
+  // Friend-related state variables
+  const [friends, setFriends] = useState<any[]>([]);
+  const [filteredFriends, setFilteredFriends] = useState<any[]>([]);
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [isLoadingFriends, setIsLoadingFriends] = useState<boolean>(false);
 
   // Check if current user is the event creator
   const isEventCreator = user && event && user.id === event.createdBy;
@@ -419,6 +431,183 @@ export default function EventScreen() {
     );
   };
 
+  // Filter friends based on search query
+  useEffect(() => {
+    if (searchQuery.trim() === '') {
+      setFilteredFriends(friends);
+    } else {
+      const query = searchQuery.toLowerCase();
+      const filtered = friends.filter(
+        friend => friend.displayName.toLowerCase().includes(query)
+      );
+      setFilteredFriends(filtered);
+    }
+  }, [searchQuery, friends]);
+  
+  // Fetch friends when add participant modal shows and User type is selected
+  useEffect(() => {
+    if (showAddModal && addParticipantType === ParticipantType.USER) {
+      fetchFriends();
+    }
+  }, [showAddModal, addParticipantType]);
+
+  const fetchFriends = async () => {
+    if (!user) return;
+    
+    try {
+      setIsLoadingFriends(true);
+      const friendsList = await FriendsService.getFriends();
+      
+      // Get detailed user info for each friend
+      const friendsData = await Promise.all(
+        friendsList.map(async (friend) => {
+          const userData = await UserService.getUser(friend.friendId);
+          return userData;
+        })
+      );
+      
+      // Filter out undefined values and already added participants
+      const validFriends = friendsData.filter(
+        friend => friend && !event?.participants?.some(p => p.id === friend.id)
+      );
+      
+      setFriends(validFriends);
+      setFilteredFriends(validFriends);
+    } catch (error) {
+      console.error('Error fetching friends:', error);
+      Alert.alert('Error', 'Failed to load friends list');
+    } finally {
+      setIsLoadingFriends(false);
+    }
+  };
+  
+  const handleSelectFriend = async (friend: any) => {
+    if (!event) return;
+    
+    try {
+      setIsUpdating(true);
+      
+      // Create participant object for the friend
+      const newParticipant: Participant = {
+        id: friend.id,
+        name: friend.displayName || 'Invited User',
+        photoURL: friend.photoURL || null,
+        type: ParticipantType.USER,
+        status: AttendeeStatus.INVITED
+      };
+      
+      // Check if capacity is reached
+      if (event.capacity && acceptedParticipants.length >= event.capacity) {
+        Alert.alert('Capacity Limit Reached', 'Cannot add more participants as it would exceed the event capacity.');
+        setIsUpdating(false);
+        setShowAddModal(false);
+        return;
+      }
+      
+      // Update the event with the new participant
+      const updatedParticipants = [...(event.participants || []), newParticipant];
+      await updateDoc(doc(db, 'events', event.id), {
+        participants: updatedParticipants
+      });
+      
+      // Update local state
+      setEvent({
+        ...event,
+        participants: updatedParticipants
+      });
+      
+      setShowAddModal(false);
+      Alert.alert('Success', `Invitation sent to ${friend.displayName}`);
+    } catch (error) {
+      console.error('Error inviting friend:', error);
+      Alert.alert('Error', 'Failed to send invitation');
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  // New function to handle adding a participant
+  const handleAddParticipant = () => {
+    // Don't allow adding participants to expired events
+    if (isExpired) {
+      Alert.alert('Event Ended', 'You cannot add participants to events that have already ended.');
+      return;
+    }
+    
+    // Check if we've reached the event capacity
+    if (event?.capacity && acceptedParticipants.length >= event.capacity) {
+      Alert.alert('Capacity Limit Reached', 'This event has reached its maximum capacity.');
+      return;
+    }
+    
+    setParticipantName('');
+    setAddParticipantType(ParticipantType.NON_USER);
+    setShowAddModal(true);
+  };
+
+  // Function to save a new participant
+  const handleSaveNewParticipant = async () => {
+    if (!event) return;
+    
+    if (!participantName.trim()) {
+      Alert.alert('Error', 'Participant name cannot be empty');
+      return;
+    }
+
+    // Check if adding a participant would exceed capacity
+    if (event.capacity && acceptedParticipants.length >= event.capacity) {
+      Alert.alert(
+        'Capacity Limit Reached', 
+        'Cannot add more participants as it would exceed the event capacity.'
+      );
+      return;
+    }
+
+    try {
+      setIsUpdating(true);
+      
+      let newParticipant: Participant;
+
+      if (addParticipantType === ParticipantType.NON_USER) {
+        // Create non-user participant
+        newParticipant = {
+          id: `non-user-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+          name: participantName,
+          type: ParticipantType.NON_USER
+        };
+      } else {
+        // Create a user participant with pending status
+        newParticipant = {
+          id: `friend-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+          name: participantName,
+          photoURL: null,
+          type: ParticipantType.USER,
+          status: AttendeeStatus.INVITED
+        };
+      }
+
+      // Update the event with the new participant
+      const updatedParticipants = [...(event.participants || []), newParticipant];
+      await updateDoc(doc(db, 'events', event.id), {
+        participants: updatedParticipants
+      });
+      
+      // Update local state
+      setEvent({
+        ...event,
+        participants: updatedParticipants
+      });
+      
+      setShowAddModal(false);
+      Alert.alert('Success', 'Participant added successfully');
+    } catch (error) {
+      console.error('Error adding participant:', error);
+      Alert.alert('Error', 'Failed to add participant');
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
   if (loading) {
     return (
       <View style={[styles.container, { backgroundColor: theme.background }]}>
@@ -616,16 +805,28 @@ export default function EventScreen() {
                 Participants ({acceptedParticipants.length}/{event.capacity || '∞'})
               </Text>
               
-              {isEventCreator && pendingParticipants.length > 0 && (
-                <TouchableOpacity 
-                  style={[styles.manageButton, { backgroundColor: theme.primary }]}
-                  onPress={() => setShowManageModal(true)}
-                >
-                  <Text style={styles.manageButtonText}>
-                    Requests ({pendingParticipants.length})
-                  </Text>
-                </TouchableOpacity>
-              )}
+              <View style={{ flexDirection: 'row' }}>
+                {isEventCreator && !isExpired && (
+                  <TouchableOpacity 
+                    style={[styles.addParticipantButton, { backgroundColor: theme.primary, marginRight: pendingParticipants.length > 0 ? 8 : 0 }]}
+                    onPress={handleAddParticipant}
+                  >
+                    <Ionicons name="add" size={16} color="white" style={{ marginRight: 4 }} />
+                    <Text style={styles.actionButtonText}>Add</Text>
+                  </TouchableOpacity>
+                )}
+                
+                {isEventCreator && pendingParticipants.length > 0 && (
+                  <TouchableOpacity 
+                    style={[styles.manageButton, { backgroundColor: theme.primary }]}
+                    onPress={() => setShowManageModal(true)}
+                  >
+                    <Text style={styles.manageButtonText}>
+                      Requests ({pendingParticipants.length})
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
             </View>
             
             {acceptedParticipants.length > 0 ? (
@@ -830,6 +1031,154 @@ export default function EventScreen() {
                 />
               </View>
             </View>
+          </View>
+        </View>
+      </Modal>
+      
+      {/* Add Participant Modal */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={showAddModal}
+        onRequestClose={() => setShowAddModal(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={[styles.modalContent, { backgroundColor: theme.card }]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: theme.text }]}>
+                Add Participant
+              </Text>
+              
+              <TouchableOpacity 
+                style={styles.closeButton}
+                onPress={() => setShowAddModal(false)}
+              >
+                <Ionicons name="close" size={24} color={theme.text} />
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.participantTypeSelector}>
+              <Text style={[styles.sectionSubtitle, { color: theme.text }]}>
+                Participant Type
+              </Text>
+              <View style={styles.typeSelectorButtons}>
+                <TouchableOpacity
+                  style={[
+                    styles.typeButton,
+                    { backgroundColor: addParticipantType === ParticipantType.NON_USER ? theme.primary : theme.card + '90' }
+                  ]}
+                  onPress={() => setAddParticipantType(ParticipantType.NON_USER)}
+                >
+                  <Text style={[
+                    styles.typeButtonText, 
+                    { color: addParticipantType === ParticipantType.NON_USER ? 'white' : theme.text }
+                  ]}>
+                    Guest
+                  </Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity
+                  style={[
+                    styles.typeButton,
+                    { backgroundColor: addParticipantType === ParticipantType.USER ? theme.primary : theme.card + '90' }
+                  ]}
+                  onPress={() => setAddParticipantType(ParticipantType.USER)}
+                >
+                  <Text style={[
+                    styles.typeButtonText, 
+                    { color: addParticipantType === ParticipantType.USER ? 'white' : theme.text }
+                  ]}>
+                    User
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+            
+            {addParticipantType === ParticipantType.NON_USER ? (
+              /* Non-user participant form */
+              <View>
+                <TextInput
+                  style={[styles.input, { 
+                    backgroundColor: theme.input, 
+                    color: theme.text,
+                    marginVertical: 16
+                  }]}
+                  placeholder="Participant name"
+                  placeholderTextColor={theme.text + '60'}
+                  value={participantName}
+                  onChangeText={setParticipantName}
+                />
+                
+                <View style={styles.modalActions}>
+                  <CustomButton
+                    title="Cancel"
+                    onPress={() => setShowAddModal(false)}
+                    secondary
+                    style={{ flex: 1, marginRight: 8 }}
+                  />
+                  
+                  <CustomButton
+                    title="Add"
+                    onPress={handleSaveNewParticipant}
+                    loading={isUpdating}
+                    style={{ flex: 1 }}
+                  />
+                </View>
+              </View>
+            ) : (
+              /* User participant selection */
+              <View style={{ marginTop: 16 }}>
+                <View style={[styles.searchContainer, { backgroundColor: theme.input }]}>
+                  <Ionicons name="search" size={20} color={theme.text + '60'} />
+                  <TextInput
+                    style={[styles.searchInput, { color: theme.text }]}
+                    placeholder="Search friends..."
+                    placeholderTextColor={theme.text + '60'}
+                    value={searchQuery}
+                    onChangeText={setSearchQuery}
+                  />
+                </View>
+                
+                {isLoadingFriends ? (
+                  <ActivityIndicator style={{ marginTop: 20 }} color={theme.primary} />
+                ) : filteredFriends.length > 0 ? (
+                  <FlatList
+                    data={filteredFriends}
+                    keyExtractor={(item) => item.id}
+                    style={{ maxHeight: 300, marginTop: 16 }}
+                    renderItem={({ item }) => (
+                      <TouchableOpacity
+                        style={[styles.friendItem, { backgroundColor: theme.background }]}
+                        onPress={() => handleSelectFriend(item)}
+                      >
+                        {isValidImageUrl(item.photoURL) ? (
+                          <Image 
+                            source={{ uri: item.photoURL }}
+                            style={styles.friendImage}
+                            defaultSource={require('../../assets/default-avatar.png')}
+                          />
+                        ) : (
+                          <View style={[styles.friendImagePlaceholder, { backgroundColor: theme.primary + '30' }]}>
+                            <Text style={{ color: theme.primary }}>
+                              {item.displayName.substring(0, 2).toUpperCase()}
+                            </Text>
+                          </View>
+                        )}
+                        <Text style={[styles.friendName, { color: theme.text }]}>
+                          {item.displayName}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                  />
+                ) : (
+                  <View style={styles.emptyFriendsContainer}>
+                    <Text style={[styles.emptyFriendsText, { color: theme.text + '80' }]}>
+                      {searchQuery ? 'No matching friends found' : 'No friends found'}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            )}
           </View>
         </View>
       </Modal>
@@ -1126,6 +1475,98 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  addParticipantButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  actionButtonText: {
+    color: 'white',
+    fontWeight: '500',
+    fontSize: 14,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 24,
+  },
+  participantTypeSelector: {
+    marginTop: 16,
+  },
+  typeSelectorButtons: {
+    flexDirection: 'row',
+    marginTop: 8,
+  },
+  typeButton: {
+    flex: 1,
+    marginHorizontal: 4,
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  typeButtonText: {
+    fontWeight: '500',
+  },
+  sectionSubtitle: {
+    fontSize: 16,
+    fontWeight: '500',
+    marginBottom: 8,
+  },
+  input: {
+    height: 48,
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    fontSize: 16,
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    height: 48,
+  },
+  searchInput: {
+    flex: 1,
+    height: '100%',
+    marginLeft: 8,
+    fontSize: 16,
+  },
+  friendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  friendImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 12,
+  },
+  friendImagePlaceholder: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  friendName: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  emptyFriendsContainer: {
+    padding: 20,
+    alignItems: 'center',
+  },
+  emptyFriendsText: {
+    textAlign: 'center',
+    fontSize: 16,
+    fontStyle: 'italic',
   },
 });
 
