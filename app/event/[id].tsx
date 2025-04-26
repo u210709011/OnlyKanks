@@ -14,7 +14,7 @@ import {
   TextInput 
 } from 'react-native';
 import { useLocalSearchParams, Stack, useRouter } from 'expo-router';
-import { doc, getDoc, updateDoc, arrayUnion } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, arrayUnion, deleteDoc } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { useTheme } from '../../context/theme.context';
 import { Ionicons } from '@expo/vector-icons';
@@ -670,6 +670,74 @@ export default function EventScreen() {
             <Text style={[styles.uploadDate, { color: theme.text + '60' }]}>
               Posted on {format(event.uploadDate.toDate(), 'MMM d, yyyy')}
             </Text>
+          )}
+          
+          {/* Creator actions buttons */}
+          {isEventCreator && (
+            <View style={{ marginTop: 24, flexDirection: 'row', justifyContent: 'space-between', gap: 10 }}>
+              <TouchableOpacity
+                style={{
+                  flex: 1,
+                  backgroundColor: theme.primary,
+                  padding: 12,
+                  borderRadius: 8,
+                  alignItems: 'center',
+                  flexDirection: 'row',
+                  justifyContent: 'center',
+                }}
+                onPress={() => router.push(`/edit-event/${id}`)}
+              >
+                <Ionicons name="create-outline" size={18} color="white" style={{ marginRight: 8 }} />
+                <Text style={{ color: 'white', fontWeight: 'bold', fontFamily: 'Roboto' }}>Edit Event</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={{
+                  flex: 1,
+                  backgroundColor: theme.error,
+                  padding: 12,
+                  borderRadius: 8,
+                  alignItems: 'center',
+                  flexDirection: 'row',
+                  justifyContent: 'center',
+                }}
+                onPress={() => {
+                  Alert.alert(
+                    'Delete Event',
+                    'Are you sure you want to delete this event? This action cannot be undone.',
+                    [
+                      { text: 'Cancel', style: 'cancel' },
+                      { 
+                        text: 'Delete', 
+                        style: 'destructive',
+                        onPress: async () => {
+                          try {
+                            // Check if user is event creator
+                            if (!user || user.id !== event.createdBy) {
+                              Alert.alert("Permission Denied", "Only the event creator can delete this event");
+                              return;
+                            }
+                            
+                            setIsUpdating(true);
+                            await deleteDoc(doc(db, 'events', event.id));
+                            Alert.alert("Success", "Event deleted successfully");
+                            router.replace('/');
+                          } catch (error) {
+                            console.error('Error deleting event:', error);
+                            Alert.alert("Error", "Failed to delete event");
+                          } finally {
+                            setIsUpdating(false);
+                          }
+                        }
+                      }
+                    ]
+                  );
+                }}
+              >
+                <Ionicons name="trash-outline" size={18} color="white" style={{ marginRight: 8 }} />
+                <Text style={{ color: 'white', fontWeight: 'bold', fontFamily: 'Roboto' }}>Delete Event</Text>
+              </TouchableOpacity>
+            </View>
           )}
         </View>
       </ScrollView>
