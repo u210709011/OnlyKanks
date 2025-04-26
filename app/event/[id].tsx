@@ -101,8 +101,15 @@ export default function EventScreen() {
     p => p.status === AttendeeStatus.PENDING
   ) || [];
 
+  // Modified: Move invited users to a separate array
+  const invitedParticipants = event?.participants?.filter(
+    p => p.status === AttendeeStatus.INVITED
+  ) || [];
+
+  // Updated: Remove invited users from acceptedParticipants
   const acceptedParticipants = event?.participants?.filter(
-    p => p.status === AttendeeStatus.ACCEPTED || p.status === AttendeeStatus.INVITED || p.type === ParticipantType.NON_USER || p.id === event?.createdBy
+    p => (p.status === AttendeeStatus.ACCEPTED || p.type === ParticipantType.NON_USER || p.id === event?.createdBy) && 
+    p.status !== AttendeeStatus.INVITED
   ) || [];
 
   useEffect(() => {
@@ -496,8 +503,9 @@ export default function EventScreen() {
         status: AttendeeStatus.INVITED
       };
       
-      // Check if capacity is reached
-      if (event.capacity && acceptedParticipants.length >= event.capacity) {
+      // Check if capacity is reached - include invited participants in the check
+      const totalParticipantsCount = acceptedParticipants.length + invitedParticipants.length;
+      if (event.capacity && totalParticipantsCount >= event.capacity) {
         Alert.alert('Capacity Limit Reached', 'Cannot add more participants as it would exceed the event capacity.');
         setIsUpdating(false);
         setShowAddModal(false);
@@ -535,7 +543,9 @@ export default function EventScreen() {
     }
     
     // Check if we've reached the event capacity
-    if (event?.capacity && acceptedParticipants.length >= event.capacity) {
+    // Updated to include invited participants in the capacity check
+    const totalParticipantsCount = acceptedParticipants.length + invitedParticipants.length;
+    if (event?.capacity && totalParticipantsCount >= event.capacity) {
       Alert.alert('Capacity Limit Reached', 'This event has reached its maximum capacity.');
       return;
     }
@@ -555,7 +565,9 @@ export default function EventScreen() {
     }
 
     // Check if adding a participant would exceed capacity
-    if (event.capacity && acceptedParticipants.length >= event.capacity) {
+    // Updated to include invited participants in the capacity check
+    const totalParticipantsCount = acceptedParticipants.length + invitedParticipants.length;
+    if (event.capacity && totalParticipantsCount >= event.capacity) {
       Alert.alert(
         'Capacity Limit Reached', 
         'Cannot add more participants as it would exceed the event capacity.'
@@ -737,8 +749,12 @@ export default function EventScreen() {
               <Ionicons name="people-outline" size={20} color={isExpired ? theme.text + '60' : theme.text} />
               <Text style={[styles.infoText, { color: isExpired ? theme.text + '60' : theme.text }]}>
                 {acceptedParticipants.length}/{event.capacity || '∞'} participants
+                {isEventCreator && invitedParticipants.length > 0 && ` (${invitedParticipants.length} invited)`}
               </Text>
-              {event.capacity && acceptedParticipants.length < event.capacity && !isEventCreator && !userParticipant && !isExpired && (
+              {event.capacity && 
+                // Updated condition to consider total participants (accepted + invited)
+                (acceptedParticipants.length + invitedParticipants.length < event.capacity) && 
+                !isEventCreator && !userParticipant && !isExpired && (
                 <TouchableOpacity 
                   style={[styles.joinButton, { backgroundColor: theme.primary }]}
                   onPress={async () => {
@@ -797,6 +813,94 @@ export default function EventScreen() {
           <Text style={[styles.description, { color: theme.text }]}>
             {event.description || 'No description provided'}
           </Text>
+
+          {/* Invited Participants section - only visible to event creator */}
+          {isEventCreator && invitedParticipants.length > 0 && (
+            <View style={styles.participantsSection}>
+              <View style={styles.sectionHeader}>
+                <Text style={[styles.sectionTitle, { color: theme.text }]}>
+                  Invited ({invitedParticipants.length})
+                </Text>
+              </View>
+              
+              <FlatList
+                data={invitedParticipants}
+                renderItem={({ item }) => (
+                  <View style={[styles.participantItem, { backgroundColor: theme.card }]}>
+                    <View style={styles.participantInfo}>
+                      {isValidImageUrl(item.photoURL) ? (
+                        <Image 
+                          source={{ uri: item.photoURL as string }} 
+                          style={styles.participantImage}
+                          defaultSource={require('../../assets/default-avatar.png')}
+                        />
+                      ) : (
+                        <View style={[styles.participantInitials, { backgroundColor: theme.primary + '20' }]}>
+                          <Text style={{ color: theme.primary, fontWeight: 'bold' }}>
+                            {item.name.substring(0, 2).toUpperCase()}
+                          </Text>
+                        </View>
+                      )}
+                      <View>
+                        <Text style={[styles.participantName, { color: theme.text }]}>
+                          {item.name}
+                        </Text>
+                        <Text style={[styles.participantStatus, { color: theme.text + '80' }]}>
+                          Waiting for response
+                        </Text>
+                      </View>
+                    </View>
+                    
+                    <TouchableOpacity 
+                      style={styles.editButton}
+                      onPress={() => {
+                        Alert.alert(
+                          'Cancel Invitation',
+                          `Do you want to cancel the invitation to ${item.name}?`,
+                          [
+                            { text: 'No', style: 'cancel' },
+                            { 
+                              text: 'Yes', 
+                              style: 'destructive',
+                              onPress: async () => {
+                                if (!event) return;
+                                try {
+                                  setIsUpdating(true);
+                                  const updatedParticipants = event.participants?.filter(
+                                    p => !(p.id === item.id && p.status === AttendeeStatus.INVITED)
+                                  ) || [];
+                                  
+                                  await updateDoc(doc(db, 'events', event.id), {
+                                    participants: updatedParticipants
+                                  });
+                                  
+                                  setEvent({
+                                    ...event,
+                                    participants: updatedParticipants
+                                  });
+                                  
+                                  Alert.alert('Success', 'Invitation canceled');
+                                } catch (error) {
+                                  console.error('Error canceling invitation:', error);
+                                  Alert.alert('Error', 'Failed to cancel invitation');
+                                } finally {
+                                  setIsUpdating(false);
+                                }
+                              }
+                            }
+                          ]
+                        );
+                      }}
+                    >
+                      <Ionicons name="close-circle" size={22} color={theme.error} />
+                    </TouchableOpacity>
+                  </View>
+                )}
+                keyExtractor={(item) => `invited-${item.type}-${item.id}`}
+                scrollEnabled={false}
+              />
+            </View>
+          )}
 
           {/* Participants section */}
           <View style={styles.participantsSection}>
@@ -1567,6 +1671,11 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 16,
     fontStyle: 'italic',
+  },
+  participantStatus: {
+    fontSize: 14,
+    fontStyle: 'italic',
+    fontFamily: 'Roboto',
   },
 });
 
