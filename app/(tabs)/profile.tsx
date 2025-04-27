@@ -1,16 +1,17 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, Pressable, ActivityIndicator, FlatList, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, Pressable, ActivityIndicator, FlatList, Dimensions, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/theme.context';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { auth, db } from '../../config/firebase';
-import { collection, query, where, getDocs } from 'firebase/firestore';
-import { Event, EventsService } from '../../services/events.service';
+import { collection, query, where, getDocs, getDoc, doc, updateDoc } from 'firebase/firestore';
+import { Event, EventsService, AttendeeStatus, ParticipantType } from '../../services/events.service';
 import { UserService } from '../../services/user.service';
 import { EventCard } from '../../components/events/EventCard';
 import { useFocusEffect } from '@react-navigation/native';
 import { FriendsService } from '../../services/friends.service';
+import { format } from 'date-fns';
 
 const { width } = Dimensions.get('window');
 const GRID_SPACING = 2;
@@ -302,6 +303,121 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  invitationsSection: {
+    padding: 16,
+    marginVertical: 8,
+    borderRadius: 12,
+  },
+  invitationsSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 4,
+  },
+  invitationHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  viewAllButton: {
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
+  invitationsSectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    fontFamily: 'Roboto',
+  },
+  viewAllText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    fontFamily: 'Roboto',
+  },
+  invitationsSlider: {
+    paddingVertical: 8,
+    paddingLeft: 4,
+    paddingRight: 8,
+  },
+  invitationSliderCard: {
+    width: 240,
+    height: 225,
+    borderRadius: 16,
+    marginRight: 16,
+    overflow: 'hidden',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  invitationContent: {
+    width: '100%',
+    height: '55%',
+    position: 'relative',
+  },
+  invitationSliderImage: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  invitationSliderImagePlaceholder: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  invitationSliderInfo: {
+    padding: 12,
+    flex: 1,
+  },
+  invitationTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 4,
+    fontFamily: 'Roboto',
+  },
+  invitationDate: {
+    fontSize: 12,
+    fontFamily: 'Roboto',
+  },
+  invitationActionButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingBottom: 12,
+  },
+  declineButton: {
+    padding: 8,
+    borderWidth: 1,
+    borderRadius: 8,
+    width: '48%',
+    alignItems: 'center',
+  },
+  joinButton: {
+    padding: 8,
+    borderRadius: 8,
+    width: '48%',
+    alignItems: 'center',
+  },
+  declineButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+    fontFamily: 'Roboto',
+  },
+  joinButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+    fontFamily: 'Roboto',
+  },
+  invitedTag: {
+    padding: 6,
+    borderRadius: 6,
+  },
+  invitedTagText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    fontFamily: 'Roboto',
+  },
 });
 
 export default function ProfileScreen() {
@@ -319,6 +435,8 @@ export default function ProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
+  const [invitedEvents, setInvitedEvents] = useState<Event[]>([]);
+  const [isInvitationsExpanded, setIsInvitationsExpanded] = useState(false);
   
   // Determine if this is for the current user
   const currentUserId = auth.currentUser?.uid;
@@ -370,6 +488,14 @@ export default function ProfileScreen() {
         console.error('Error fetching user events:', error);
       }
       
+      // Fetch events user is invited to
+      try {
+        const invitedEventsData = await EventsService.getInvitedEvents(currentUserId);
+        setInvitedEvents(invitedEventsData);
+      } catch (error) {
+        console.error('Error fetching invited events:', error);
+      }
+      
       // Fetch friends count
       try {
         const count = await FriendsService.getFriendsCount(currentUserId);
@@ -407,6 +533,85 @@ export default function ProfileScreen() {
 
   const handleEditProfile = () => {
     router.push('/profile/edit');
+  };
+
+  const handleAcceptInvitation = async (eventId: string) => {
+    if (!auth.currentUser) return;
+    
+    try {
+      const userId = auth.currentUser.uid;
+      
+      // Get the event
+      const eventDoc = await getDoc(doc(db, 'events', eventId));
+      if (!eventDoc.exists()) {
+        throw new Error('Event not found');
+      }
+      
+      const eventData = eventDoc.data() as Event;
+      const participants = eventData.participants || [];
+      
+      // Find the user's participant entry and update its status
+      const updatedParticipants = participants.map(p => {
+        if (p.id === userId && p.status === AttendeeStatus.INVITED) {
+          return {
+            ...p,
+            status: AttendeeStatus.ACCEPTED,
+            // Update name and photo from current user if available
+            name: auth.currentUser?.displayName || p.name,
+            photoURL: auth.currentUser?.photoURL || p.photoURL
+          };
+        }
+        return p;
+      });
+      
+      // Update the event
+      await updateDoc(doc(db, 'events', eventId), {
+        participants: updatedParticipants
+      });
+      
+      // Remove this invitation from the local state
+      setInvitedEvents(invitedEvents.filter(event => event.id !== eventId));
+      
+      // Refresh the profile data to update attended events count
+      fetchUserProfile();
+    } catch (error) {
+      console.error('Error accepting invitation:', error);
+      Alert.alert('Error', 'Failed to accept invitation');
+    }
+  };
+
+  const handleDeclineInvitation = async (eventId: string) => {
+    if (!auth.currentUser) return;
+    
+    try {
+      const userId = auth.currentUser.uid;
+      
+      // Get the event
+      const eventDoc = await getDoc(doc(db, 'events', eventId));
+      if (!eventDoc.exists()) {
+        throw new Error('Event not found');
+      }
+      
+      const eventData = eventDoc.data() as Event;
+      const participants = eventData.participants || [];
+      
+      // Remove the user from participants list or filter out the invited entry
+      const updatedParticipants = participants.filter(
+        p => !(p.id === userId && p.status === AttendeeStatus.INVITED)
+      );
+      
+      // Update the event
+      await updateDoc(doc(db, 'events', eventId), {
+        participants: updatedParticipants
+      });
+      
+      // Remove this invitation from the local state
+      setInvitedEvents(invitedEvents.filter(event => event.id !== eventId));
+      
+    } catch (error) {
+      console.error('Error declining invitation:', error);
+      Alert.alert('Error', 'Failed to decline invitation');
+    }
   };
 
   if (loading) {
@@ -525,6 +730,100 @@ export default function ProfileScreen() {
                 </TouchableOpacity>
               </View>
               
+              {/* Invitations Section */}
+              {invitedEvents.length > 0 && (
+                <View style={[styles.invitationsSection, { backgroundColor: theme.card + '30' }]}>
+                  <TouchableOpacity 
+                    style={[
+                      styles.invitationsSectionHeader,
+                      { marginBottom: isInvitationsExpanded ? 12 : 0 }
+                    ]}
+                    onPress={() => setIsInvitationsExpanded(!isInvitationsExpanded)}
+                  >
+                    <Text style={[styles.invitationsSectionTitle, { color: theme.text }]}>
+                      Event Invitations {invitedEvents.length > 0 && `(${invitedEvents.length})`}
+                    </Text>
+                    <View style={styles.invitationHeaderRight}>
+                      {invitedEvents.length > 2 && (
+                        <TouchableOpacity 
+                          onPress={(e) => {
+                            e.stopPropagation();
+                            router.push('/settings/invitations');
+                          }}
+                          style={styles.viewAllButton}
+                        >
+                          <Text style={[styles.viewAllText, { color: theme.primary }]}>
+                            View All
+                          </Text>
+                        </TouchableOpacity>
+                      )}
+                      <Ionicons 
+                        name={isInvitationsExpanded ? "chevron-up" : "chevron-down"} 
+                        size={18} 
+                        color={theme.text} 
+                        style={{marginLeft: 8}}
+                      />
+                    </View>
+                  </TouchableOpacity>
+                  
+                  {isInvitationsExpanded && (
+                    <ScrollView 
+                      horizontal 
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={styles.invitationsSlider}
+                    >
+                      {invitedEvents.map(event => (
+                        <View key={event.id} style={[styles.invitationSliderCard, { backgroundColor: theme.card }]}>
+                          <TouchableOpacity 
+                            style={styles.invitationContent}
+                            onPress={() => router.push(`/event/${event.id}`)}
+                          >
+                            {event.imageUrl ? (
+                              <Image 
+                                source={{ uri: event.imageUrl }} 
+                                style={styles.invitationSliderImage} 
+                              />
+                            ) : (
+                              <View style={[styles.invitationSliderImagePlaceholder, { backgroundColor: theme.primary + '20' }]}>
+                                <Ionicons name="calendar-outline" size={28} color={theme.primary} />
+                              </View>
+                            )}
+                            <View style={[styles.invitedTag, { backgroundColor: theme.primary + '15', position: 'absolute', top: 12, right: 12 }]}>
+                              <Text style={[styles.invitedTagText, { color: theme.primary }]}>Invited</Text>
+                            </View>
+                          </TouchableOpacity>
+                          
+                          <View style={styles.invitationSliderInfo}>
+                            <Text style={[styles.invitationTitle, { color: theme.text }]} numberOfLines={1}>
+                              {event.title}
+                            </Text>
+                            <Text style={[styles.invitationDate, { color: theme.text + '80' }]}>
+                              {format(event.date.toDate(), 'MMM d, yyyy • h:mm a')}
+                            </Text>
+                          </View>
+                          
+                          <View style={styles.invitationActionButtons}>
+                            <TouchableOpacity 
+                              style={[styles.declineButton, { borderColor: theme.error }]}
+                              onPress={() => handleDeclineInvitation(event.id)}
+                            >
+                              <Text style={[styles.declineButtonText, { color: theme.error }]}>Decline</Text>
+                            </TouchableOpacity>
+                            
+                            <TouchableOpacity 
+                              style={[styles.joinButton, { backgroundColor: theme.primary }]}
+                              onPress={() => handleAcceptInvitation(event.id)}
+                            >
+                              <Text style={[styles.joinButtonText, { color: 'white' }]}>Accept</Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      ))}
+                    </ScrollView>
+                  )}
+                </View>
+              )}
+              
               {/* Tabs for Events */}
               <View style={[styles.tabsContainer, { borderBottomColor: theme.border }]}>
                 <TouchableOpacity style={[styles.tabButton, styles.activeTab]}>
@@ -638,6 +937,100 @@ export default function ProfileScreen() {
                   <Text style={[styles.editButtonText, { color: theme.text }]}>Edit Profile</Text>
                 </TouchableOpacity>
               </View>
+              
+              {/* Invitations Section */}
+              {invitedEvents.length > 0 && (
+                <View style={[styles.invitationsSection, { backgroundColor: theme.card + '30' }]}>
+                  <TouchableOpacity 
+                    style={[
+                      styles.invitationsSectionHeader,
+                      { marginBottom: isInvitationsExpanded ? 12 : 0 }
+                    ]}
+                    onPress={() => setIsInvitationsExpanded(!isInvitationsExpanded)}
+                  >
+                    <Text style={[styles.invitationsSectionTitle, { color: theme.text }]}>
+                      Event Invitations {invitedEvents.length > 0 && `(${invitedEvents.length})`}
+                    </Text>
+                    <View style={styles.invitationHeaderRight}>
+                      {invitedEvents.length > 2 && (
+                        <TouchableOpacity 
+                          onPress={(e) => {
+                            e.stopPropagation();
+                            router.push('/settings/invitations');
+                          }}
+                          style={styles.viewAllButton}
+                        >
+                          <Text style={[styles.viewAllText, { color: theme.primary }]}>
+                            View All
+                          </Text>
+                        </TouchableOpacity>
+                      )}
+                      <Ionicons 
+                        name={isInvitationsExpanded ? "chevron-up" : "chevron-down"} 
+                        size={18} 
+                        color={theme.text} 
+                        style={{marginLeft: 8}}
+                      />
+                    </View>
+                  </TouchableOpacity>
+                  
+                  {isInvitationsExpanded && (
+                    <ScrollView 
+                      horizontal 
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={styles.invitationsSlider}
+                    >
+                      {invitedEvents.map(event => (
+                        <View key={event.id} style={[styles.invitationSliderCard, { backgroundColor: theme.card }]}>
+                          <TouchableOpacity 
+                            style={styles.invitationContent}
+                            onPress={() => router.push(`/event/${event.id}`)}
+                          >
+                            {event.imageUrl ? (
+                              <Image 
+                                source={{ uri: event.imageUrl }} 
+                                style={styles.invitationSliderImage} 
+                              />
+                            ) : (
+                              <View style={[styles.invitationSliderImagePlaceholder, { backgroundColor: theme.primary + '20' }]}>
+                                <Ionicons name="calendar-outline" size={28} color={theme.primary} />
+                              </View>
+                            )}
+                            <View style={[styles.invitedTag, { backgroundColor: theme.primary + '15', position: 'absolute', top: 12, right: 12 }]}>
+                              <Text style={[styles.invitedTagText, { color: theme.primary }]}>Invited</Text>
+                            </View>
+                          </TouchableOpacity>
+                          
+                          <View style={styles.invitationSliderInfo}>
+                            <Text style={[styles.invitationTitle, { color: theme.text }]} numberOfLines={1}>
+                              {event.title}
+                            </Text>
+                            <Text style={[styles.invitationDate, { color: theme.text + '80' }]}>
+                              {format(event.date.toDate(), 'MMM d, yyyy • h:mm a')}
+                            </Text>
+                          </View>
+                          
+                          <View style={styles.invitationActionButtons}>
+                            <TouchableOpacity 
+                              style={[styles.declineButton, { borderColor: theme.error }]}
+                              onPress={() => handleDeclineInvitation(event.id)}
+                            >
+                              <Text style={[styles.declineButtonText, { color: theme.error }]}>Decline</Text>
+                            </TouchableOpacity>
+                            
+                            <TouchableOpacity 
+                              style={[styles.joinButton, { backgroundColor: theme.primary }]}
+                              onPress={() => handleAcceptInvitation(event.id)}
+                            >
+                              <Text style={[styles.joinButtonText, { color: 'white' }]}>Accept</Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      ))}
+                    </ScrollView>
+                  )}
+                </View>
+              )}
               
               {/* Tabs for Events */}
               <View style={[styles.tabsContainer, { borderBottomColor: theme.border }]}>

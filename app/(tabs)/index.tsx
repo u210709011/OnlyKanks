@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { View, StyleSheet, ActivityIndicator, RefreshControl, Text, SectionList, TouchableOpacity, ScrollView } from 'react-native';
+import { View, StyleSheet, ActivityIndicator, RefreshControl, Text, SectionList, TouchableOpacity, ScrollView, StyleProp, ViewStyle, TextStyle, ImageStyle } from 'react-native';
 import { EventCard } from '../../components/events/EventCard';
 import { Event, EventsService, EventFilterOptions, AttendeeStatus, ParticipantType } from '../../services/events.service';
 import { useTheme } from '../../context/theme.context';
@@ -15,6 +15,21 @@ interface EventGroup {
   date: Date;
   events: Event[];
 }
+
+// Define types for the styles
+type AppStyles = {
+  container: ViewStyle;
+  header: ViewStyle;
+  headerTitle: TextStyle;
+  messagesButton: ViewStyle;
+  centered: ViewStyle;
+  emptyContainer: ViewStyle;
+  emptyText: TextStyle;
+  emptySubtext: TextStyle;
+  sectionHeader: ViewStyle;
+  sectionHeaderText: TextStyle;
+  emptyScrollContainer: ViewStyle;
+};
 
 export default function ExploreScreen() {
   const { theme, isDark } = useTheme();
@@ -322,7 +337,7 @@ export default function ExploreScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = StyleSheet.create<AppStyles>({
   container: {
     flex: 1,
   },
@@ -383,5 +398,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     minHeight: '100%',
-  },
+  }
 });

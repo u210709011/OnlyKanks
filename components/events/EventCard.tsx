@@ -54,6 +54,7 @@ export const EventCard: React.FC<EventCardProps> = ({ event, onPress }) => {
   const [isParticipating, setIsParticipating] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
   const [isExpired, setIsExpired] = useState(false);
+  const [isInvited, setIsInvited] = useState(false);
 
   useEffect(() => {
     // Check if event is expired (current time is after event time + duration)
@@ -94,7 +95,7 @@ export const EventCard: React.FC<EventCardProps> = ({ event, onPress }) => {
       fetchCreator();
     }
 
-    // Check if user has already requested to join this event
+    // Check if user has already requested to join this event or has been invited
     if (user && event.participants) {
       const userParticipant = event.participants.find(
         p => p.id === user.id && p.type === ParticipantType.USER
@@ -104,7 +105,9 @@ export const EventCard: React.FC<EventCardProps> = ({ event, onPress }) => {
             userParticipant.status === undefined || // For backward compatibility 
             userParticipant.id === event.createdBy) {
           setIsParticipating(true);
-        } else {
+        } else if (userParticipant.status === AttendeeStatus.INVITED) {
+          setIsInvited(true);
+        } else if (userParticipant.status === AttendeeStatus.PENDING) {
           setIsJoinRequested(true);
         }
       }
@@ -135,6 +138,12 @@ export const EventCard: React.FC<EventCardProps> = ({ event, onPress }) => {
 
     if (event.createdBy === user.id) {
       Alert.alert("Notice", "You're the creator of this event");
+      return;
+    }
+
+    // If the user has been invited, accept the invitation
+    if (isInvited) {
+      await acceptInvitation();
       return;
     }
 
@@ -172,6 +181,54 @@ export const EventCard: React.FC<EventCardProps> = ({ event, onPress }) => {
     } catch (error) {
       console.error('Error requesting to join event:', error);
       Alert.alert("Error", "Failed to send join request");
+    } finally {
+      setIsJoining(false);
+    }
+  };
+
+  // Handle accepting an invitation
+  const acceptInvitation = async () => {
+    if (!user) return;
+    
+    try {
+      setIsJoining(true);
+      
+      // Get the event
+      const eventRef = doc(db, 'events', event.id);
+      const eventDoc = await getDoc(eventRef);
+      
+      if (!eventDoc.exists()) {
+        throw new Error('Event not found');
+      }
+      
+      const eventData = eventDoc.data() as Event;
+      const participants = eventData.participants || [];
+      
+      // Find the user's participant entry and update its status
+      const updatedParticipants = participants.map(p => {
+        if (p.id === user.id && p.status === AttendeeStatus.INVITED) {
+          return {
+            ...p,
+            status: AttendeeStatus.ACCEPTED,
+            // Update name and photo from current user if available
+            name: user.displayName || p.name,
+            photoURL: user.photoURL || p.photoURL
+          };
+        }
+        return p;
+      });
+      
+      // Update the event
+      await updateDoc(eventRef, {
+        participants: updatedParticipants
+      });
+      
+      setIsInvited(false);
+      setIsParticipating(true);
+      Alert.alert('Success', 'You have joined the event!');
+    } catch (error) {
+      console.error('Error accepting invitation:', error);
+      Alert.alert('Error', 'Failed to accept invitation');
     } finally {
       setIsJoining(false);
     }
@@ -236,6 +293,12 @@ export const EventCard: React.FC<EventCardProps> = ({ event, onPress }) => {
               {format(eventDate, 'MMM')}
             </Text>
           </View>
+          
+          {isInvited && (
+            <View style={[styles.invitedBadge, { backgroundColor: theme.primary, marginRight: 8 }]}>
+              <Text style={styles.invitedBadgeText}>Invited</Text>
+            </View>
+          )}
           
           {isExpired && (
             <View style={[styles.expiredBadge, { backgroundColor: theme.error }]}>
@@ -344,21 +407,24 @@ export const EventCard: React.FC<EventCardProps> = ({ event, onPress }) => {
                       ? theme.primary 
                       : isJoinRequested 
                         ? theme.primary + '30' 
-                        : theme.primary,
+                        : isInvited
+                          ? theme.primary
+                          : theme.primary,
                     display: isExpired ? 'none' : 'flex'
                   }
                 ]}
                 onPress={requestToJoin}
-                disabled={isJoinRequested || isParticipating || isJoining || isExpired}
+                disabled={isParticipating || (isJoinRequested && !isInvited) || isJoining || isExpired}
               >
                 <Text style={[
                   styles.joinButtonText, 
                   { 
-                    color: isJoinRequested ? theme.primary : 'white'
+                    color: isJoinRequested && !isInvited ? theme.primary : 'white'
                   }
                 ]}>
                   {isJoining ? 'Sending...' : (
                     isParticipating ? 'Participating' :
+                    isInvited ? 'Join' :
                     isJoinRequested ? 'Requested' : 'Join'
                   )}
                 </Text>
@@ -546,6 +612,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   expiredText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: 'bold',
+    fontFamily: 'Roboto',
+  },
+  invitedBadge: {
+    marginLeft: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  invitedBadgeText: {
     color: 'white',
     fontSize: 12,
     fontWeight: 'bold',

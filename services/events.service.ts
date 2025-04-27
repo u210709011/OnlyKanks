@@ -592,4 +592,40 @@ export class EventsService {
       return 0;
     }
   }
+
+  // Get events that a user is invited to
+  static async getInvitedEvents(userId: string): Promise<Event[]> {
+    try {
+      // Get all events
+      const eventsRef = collection(db, collections.EVENTS);
+      const querySnapshot = await getDocs(eventsRef);
+      
+      const now = new Date();
+      const todayStart = startOfDay(now);
+      
+      // Filter for events where the user is a participant with INVITED status
+      const invitedEvents = querySnapshot.docs
+        .map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }) as Event)
+        .filter(event => {
+          // Skip past events
+          const eventDate = event.date.toDate();
+          if (eventDate < todayStart) return false;
+          
+          // Check if user is invited
+          return event.participants?.some(
+            p => p.id === userId && 
+            p.type === ParticipantType.USER && 
+            p.status === AttendeeStatus.INVITED
+          );
+        });
+      
+      return invitedEvents;
+    } catch (error) {
+      console.error('Error fetching invited events:', error);
+      return [];
+    }
+  }
 } 
