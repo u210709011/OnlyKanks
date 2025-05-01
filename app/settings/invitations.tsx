@@ -7,6 +7,7 @@ import { Event, AttendeeStatus, ParticipantType } from '../../services/events.se
 import { format } from 'date-fns';
 import { auth, db } from '../../config/firebase';
 import { collection, query, where, getDocs, doc, getDoc, updateDoc } from 'firebase/firestore';
+import { EventsService } from '../../services/events.service';
 
 interface InvitationEvent {
   id: string;
@@ -32,6 +33,9 @@ export default function InvitationsScreen() {
     try {
       setLoading(true);
       const userId = auth.currentUser.uid;
+      
+      // First cleanup expired invitations
+      await EventsService.cleanupExpiredInvitationsAndRequests();
       
       // Find events where the user is in participants with INVITED status
       const eventsRef = collection(db, 'events');

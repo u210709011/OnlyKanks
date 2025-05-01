@@ -3,7 +3,7 @@ import { auth } from '../config/firebase';
 import { collection, query, where, getDocs, GeoPoint, orderBy, Timestamp, serverTimestamp, addDoc, deleteDoc, doc, updateDoc, getDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import uuid from 'react-native-uuid';
-import { startOfDay, endOfDay, isAfter, isBefore, isEqual } from 'date-fns';
+import { startOfDay, endOfDay, isAfter, isBefore, isEqual, addMinutes } from 'date-fns';
 import { UserService } from './user.service';
 
 export enum ParticipantType {
@@ -129,7 +129,6 @@ export class EventsService {
     const q = query(eventsRef, where('createdBy', '==', userId));
     const querySnapshot = await getDocs(q);
     const now = new Date();
-    const todayStart = startOfDay(now);
     
     return querySnapshot.docs
       .map(doc => ({
@@ -138,7 +137,10 @@ export class EventsService {
       }) as Event)
       .filter(event => {
         const eventDate = event.date.toDate();
-        return eventDate >= todayStart;
+        const endTime = event.duration ? addMinutes(eventDate, event.duration) : eventDate;
+        
+        // Only include events that haven't ended yet
+        return now < endTime;
       });
   }
 
@@ -148,7 +150,6 @@ export class EventsService {
     const querySnapshot = await getDocs(q);
     
     const now = new Date();
-    const todayStart = startOfDay(now);
     
     return querySnapshot.docs
       .map(doc => ({
@@ -157,7 +158,10 @@ export class EventsService {
       }) as Event)
       .filter(event => {
         const eventDate = event.date.toDate();
-        return eventDate >= todayStart;
+        const endTime = event.duration ? addMinutes(eventDate, event.duration) : eventDate;
+        
+        // Only include events that haven't ended yet
+        return now < endTime;
       });
   }
 
@@ -405,12 +409,24 @@ export class EventsService {
     // Get all events created by the current user
     const events = await this.getUserEvents(auth.currentUser.uid);
     
-    // Filter to only include events with pending requests
-    return events.filter(event => 
-      event.participants?.some(participant => 
+    const now = new Date();
+    
+    // Filter to only include events with pending requests and that haven't ended
+    return events.filter(event => {
+      // Check if event has pending requests
+      const hasPendingRequests = event.participants?.some(participant => 
         participant.status === AttendeeStatus.PENDING
-      )
-    );
+      );
+      
+      if (!hasPendingRequests) return false;
+      
+      // Check if event has ended
+      const eventDate = event.date.toDate();
+      const endTime = event.duration ? addMinutes(eventDate, event.duration) : eventDate;
+      
+      // Only include events that haven't ended yet
+      return now < endTime;
+    });
   }
 
   // Count pending requests for a specific event
@@ -514,7 +530,6 @@ export class EventsService {
       const querySnapshot = await getDocs(eventsRef);
       
       const now = new Date();
-      const todayStart = startOfDay(now);
       
       // Filter for events where the user is a participant with ACCEPTED status
       // but not the creator of the event
@@ -524,19 +539,24 @@ export class EventsService {
           ...doc.data()
         }) as Event)
         .filter(event => {
-          // Skip past events
-          const eventDate = event.date.toDate();
-          if (eventDate < todayStart) return false;
-          
           // Skip events created by the user
           if (event.createdBy === userId) return false;
           
           // Check if user is a participant
-          return event.participants?.some(
+          const isAttending = event.participants?.some(
             p => p.id === userId && 
             p.type === ParticipantType.USER && 
             (p.status === AttendeeStatus.ACCEPTED || p.status === undefined)
           );
+          
+          if (!isAttending) return false;
+          
+          // Check if event has ended (considering both date and duration)
+          const eventDate = event.date.toDate();
+          const endTime = event.duration ? addMinutes(eventDate, event.duration) : eventDate;
+          
+          // Only include events that haven't ended yet
+          return now < endTime;
         });
       
       return attendingEvents;
@@ -601,7 +621,6 @@ export class EventsService {
       const querySnapshot = await getDocs(eventsRef);
       
       const now = new Date();
-      const todayStart = startOfDay(now);
       
       // Filter for events where the user is a participant with INVITED status
       const invitedEvents = querySnapshot.docs
@@ -610,22 +629,83 @@ export class EventsService {
           ...doc.data()
         }) as Event)
         .filter(event => {
-          // Skip past events
-          const eventDate = event.date.toDate();
-          if (eventDate < todayStart) return false;
-          
           // Check if user is invited
-          return event.participants?.some(
+          const isInvited = event.participants?.some(
             p => p.id === userId && 
             p.type === ParticipantType.USER && 
             p.status === AttendeeStatus.INVITED
           );
+          
+          if (!isInvited) return false;
+          
+          // Check if event has ended (considering both date and duration)
+          const eventDate = event.date.toDate();
+          const endTime = event.duration ? addMinutes(eventDate, event.duration) : eventDate;
+          
+          // Only include events that haven't ended yet
+          return now < endTime;
         });
       
       return invitedEvents;
     } catch (error) {
       console.error('Error fetching invited events:', error);
       return [];
+    }
+  }
+
+  // Clean up expired invitations and requests from events
+  static async cleanupExpiredInvitationsAndRequests(eventId?: string): Promise<void> {
+    try {
+      const now = new Date();
+      let eventsToCheck: Event[] = [];
+      
+      // If eventId is provided, only check that specific event
+      if (eventId) {
+        const eventDoc = await getDoc(doc(db, collections.EVENTS, eventId));
+        if (eventDoc.exists()) {
+          eventsToCheck = [{
+            id: eventDoc.id,
+            ...eventDoc.data()
+          } as Event];
+        }
+      } else {
+        // Otherwise, get all events
+        const eventsRef = collection(db, collections.EVENTS);
+        const querySnapshot = await getDocs(eventsRef);
+        eventsToCheck = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }) as Event);
+      }
+      
+      // Process each event
+      for (const event of eventsToCheck) {
+        // Check if event has ended
+        const eventDate = event.date.toDate();
+        const endTime = event.duration ? addMinutes(eventDate, event.duration) : eventDate;
+        
+        if (now < endTime) continue; // Skip events that haven't ended yet
+        
+        // Get the participants array
+        const participants = event.participants || [];
+        
+        // Filter out pending and invited participants
+        const updatedParticipants = participants.filter(p => 
+          p.status !== AttendeeStatus.PENDING && 
+          p.status !== AttendeeStatus.INVITED
+        );
+        
+        // Only update if there are changes
+        if (updatedParticipants.length !== participants.length) {
+          // Update the event document
+          await updateDoc(doc(db, collections.EVENTS, event.id), {
+            participants: updatedParticipants
+          });
+          console.log(`Cleaned up ${participants.length - updatedParticipants.length} expired invitations/requests for event ${event.id}`);
+        }
+      }
+    } catch (error) {
+      console.error('Error cleaning up expired invitations and requests:', error);
     }
   }
 } 

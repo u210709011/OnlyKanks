@@ -1,11 +1,14 @@
 import { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, TextInput, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Image } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { User, UserService } from '../../services/user.service';
 import { auth } from '../../config/firebase';
 import { useTheme } from '../../context/theme.context';
 import { CustomButton } from '../../components/shared/CustomButton';
+import * as ImagePicker from 'expo-image-picker';
+import { CloudinaryService } from '../../services/cloudinary.service';
+import { updateProfile } from 'firebase/auth';
 
 export default function EditProfileScreen() {
   const router = useRouter();
@@ -13,6 +16,9 @@ export default function EditProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [user, setUser] = useState<User | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [profileImage, setProfileImage] = useState<string | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
   
   // Profile fields
   const [displayName, setDisplayName] = useState('');
@@ -38,6 +44,8 @@ export default function EditProfileScreen() {
           setCity(userData.location?.city || '');
           setProvince(userData.location?.province || '');
           setInterests(userData.interests || []);
+          setProfileImage(userData.photoURL || null);
+          setImagePreview(userData.photoURL || null);
         }
       } catch (error) {
         console.error('Error fetching user data:', error);
@@ -48,6 +56,54 @@ export default function EditProfileScreen() {
 
     fetchUserProfile();
   }, []);
+
+  const pickImage = async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.7,
+      });
+
+      if (!result.canceled) {
+        setImagePreview(result.assets[0].uri);
+        await uploadProfileImage(result.assets[0].uri);
+      }
+    } catch (error) {
+      console.error('Error picking image:', error);
+      Alert.alert('Error', 'Failed to pick image');
+    }
+  };
+
+  const uploadProfileImage = async (uri: string) => {
+    if (!auth.currentUser) return;
+    
+    try {
+      setUploadingImage(true);
+      
+      // Upload to Cloudinary
+      const url = await CloudinaryService.uploadImage(uri);
+      
+      // Update Authentication profile
+      await updateProfile(auth.currentUser, {
+        photoURL: url
+      });
+      
+      // Update Firestore document
+      await UserService.updateUser(auth.currentUser.uid, {
+        photoURL: url
+      });
+      
+      setProfileImage(url);
+      Alert.alert('Success', 'Profile picture updated successfully');
+    } catch (error) {
+      console.error('Error uploading profile image:', error);
+      Alert.alert('Error', 'Failed to upload profile image');
+    } finally {
+      setUploadingImage(false);
+    }
+  };
 
   const handleAddInterest = () => {
     if (newInterest.trim() && !interests.includes(newInterest.trim())) {
@@ -95,7 +151,10 @@ export default function EditProfileScreen() {
   }
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: theme.background }]}>
+    <ScrollView 
+      style={[styles.container, { backgroundColor: theme.background }]}
+      contentContainerStyle={{ paddingTop: 70 }}
+    >
       <View style={[styles.customHeader, { 
         paddingTop: 50, 
         paddingBottom: 10,
@@ -103,6 +162,7 @@ export default function EditProfileScreen() {
         flexDirection: 'row',
         alignItems: 'center',
         paddingHorizontal: 16,
+        zIndex: 10,
       }]}>
         <TouchableOpacity onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={24} color={theme.text} />
@@ -118,6 +178,38 @@ export default function EditProfileScreen() {
       </View>
       
       <View style={styles.form}>
+        {/* Profile Image Picker */}
+        <View style={styles.profileImageContainer}>
+          <TouchableOpacity 
+            style={styles.profileImageWrapper} 
+            onPress={pickImage}
+            disabled={uploadingImage}
+          >
+            {imagePreview ? (
+              <Image 
+                source={{ uri: imagePreview }} 
+                style={styles.profileImage} 
+              />
+            ) : (
+              <View style={[styles.profileImagePlaceholder, { backgroundColor: theme.card + '50' }]}>
+                <Ionicons name="person" size={40} color={theme.text + '60'} />
+              </View>
+            )}
+            {uploadingImage ? (
+              <View style={[styles.uploadOverlay, { backgroundColor: 'rgba(0,0,0,0.5)' }]}>
+                <ActivityIndicator color="white" />
+              </View>
+            ) : (
+              <View style={[styles.editImageButton, { backgroundColor: theme.primary }]}>
+                <Ionicons name="camera" size={16} color="white" />
+              </View>
+            )}
+          </TouchableOpacity>
+          <Text style={[styles.changePhotoText, { color: theme.text + '90' }]}>
+            Tap to change profile photo
+          </Text>
+        </View>
+        
         <View style={styles.inputGroup}>
           <Text style={[styles.label, { color: theme.text }]}>Name</Text>
           <TextInput
@@ -265,6 +357,54 @@ const styles = StyleSheet.create({
   },
   form: {
     padding: 16,
+  },
+  profileImageContainer: {
+    alignItems: 'center',
+    marginVertical: 20,
+  },
+  profileImageWrapper: {
+    position: 'relative',
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    overflow: 'hidden',
+    marginBottom: 10,
+  },
+  profileImage: {
+    width: '100%',
+    height: '100%',
+  },
+  profileImagePlaceholder: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 50,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  uploadOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 50,
+  },
+  editImageButton: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  changePhotoText: {
+    fontSize: 14,
+    marginTop: 5,
+    fontFamily: 'Roboto',
   },
   inputGroup: {
     marginBottom: 20,

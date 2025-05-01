@@ -25,6 +25,7 @@ import { UserService } from '../../services/user.service';
 import { useAuth } from '../../context/auth.context';
 import { CustomButton } from '../../components/shared/CustomButton';
 import { FriendsService } from '../../services/friends.service';
+import { EventsService } from '../../services/events.service';
 
 // Define a type for creator data
 interface CreatorData {
@@ -168,7 +169,13 @@ export default function EventScreen() {
         // Check if event is expired
         if (eventData.duration) {
           const endTime = addMinutes(eventData.date, eventData.duration);
-          setIsExpired(isPast(endTime));
+          const expired = isPast(endTime);
+          setIsExpired(expired);
+          
+          // If event is expired, clean up pending requests and invitations
+          if (expired) {
+            await EventsService.cleanupExpiredInvitationsAndRequests(eventData.id);
+          }
         }
 
         // Fetch creator information

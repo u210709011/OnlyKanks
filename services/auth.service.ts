@@ -4,7 +4,7 @@ import {
   signOut as firebaseSignOut,
   updateProfile
 } from 'firebase/auth';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp, getDoc } from 'firebase/firestore';
 import { auth, db } from '../config/firebase';
 import { LocationService } from './location.service';
 import { collections } from './firebase.service';
@@ -37,12 +37,35 @@ export const signIn = async (email: string, password: string) => {
   try {
     const { user } = await signInWithEmailAndPassword(auth, email, password);
     
-    // Update online status
+    // Check if user document exists in Firestore
     const userRef = doc(db, collections.USERS, user.uid);
-    await setDoc(userRef, {
-      isOnline: true,
-      updatedAt: serverTimestamp()
-    }, { merge: true });
+    const userDoc = await getDoc(userRef);
+    
+    if (!userDoc.exists()) {
+      // User exists in authentication but not in Firestore
+      // This can happen if the user was created directly in Authentication
+      // or if the Firestore document was deleted
+      console.log('Creating missing user document in Firestore');
+      
+      // Get user's location
+      const location = await LocationService.getCurrentLocation();
+      
+      // Create a new user document
+      await setDoc(userRef, {
+        email: user.email,
+        displayName: user.displayName || email.split('@')[0],
+        location,
+        isOnline: true,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    } else {
+      // User exists, just update online status
+      await setDoc(userRef, {
+        isOnline: true,
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+    }
     
     return user;
   } catch (error) {

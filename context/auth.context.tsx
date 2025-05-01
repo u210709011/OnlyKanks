@@ -1,10 +1,12 @@
 import { createContext, useContext, useEffect, useState } from 'react';
-import { onAuthStateChanged } from 'firebase/auth';
-import { auth } from '../config/firebase';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { auth, db } from '../config/firebase';
 import { User } from '../types/user.types';
 import { useRouter, useSegments } from 'expo-router';
 import { UserService } from '../services/user.service';
 import { AppState, AppStateStatus } from 'react-native';
+import { doc, getDoc } from 'firebase/firestore';
+import { collections } from '../services/firebase.service';
 
 interface AuthContextType {
   user: User | null;
@@ -49,20 +51,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
-        // Set online status when user signs in
-        await UserService.updateOnlineStatus(true);
-        
-        setUser({
-          id: firebaseUser.uid,
-          email: firebaseUser.email!,
-          displayName: firebaseUser.displayName || undefined,
-          photoURL: firebaseUser.photoURL || undefined,
-        });
-      } else {
+      try {
+        if (firebaseUser) {
+          // Check if the user document exists in Firestore
+          const userDoc = await getDoc(doc(db, collections.USERS, firebaseUser.uid));
+          
+          if (!userDoc.exists()) {
+            // User was deleted in Firebase console but still has a valid auth token
+            console.log('User document not found in Firestore, signing out');
+            await signOut(auth);
+            setUser(null);
+          } else {
+            // User exists, set online status
+            await UserService.updateOnlineStatus(true);
+            
+            setUser({
+              id: firebaseUser.uid,
+              email: firebaseUser.email!,
+              displayName: firebaseUser.displayName || undefined,
+              photoURL: firebaseUser.photoURL || undefined,
+            });
+          }
+        } else {
+          setUser(null);
+        }
+      } catch (error) {
+        console.error('Error in auth state change:', error);
+        // If there's an error, better to sign out and set user to null
         setUser(null);
+      } finally {
+        setIsLoading(false);
       }
-      setIsLoading(false);
     });
 
     return unsubscribe;

@@ -490,6 +490,9 @@ export default function ProfileScreen() {
       
       // Fetch events user is invited to
       try {
+        // First cleanup expired invitations
+        await EventsService.cleanupExpiredInvitationsAndRequests();
+        
         const invitedEventsData = await EventsService.getInvitedEvents(currentUserId);
         setInvitedEvents(invitedEventsData);
       } catch (error) {

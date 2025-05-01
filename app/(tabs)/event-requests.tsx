@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, FlatList, Pressable } from 'react-native';
+import { View, Text, StyleSheet, FlatList } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useFocusEffect } from 'expo-router';
@@ -7,6 +7,7 @@ import { Event, EventsService } from '../../services/events.service';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { EventRequestListItem } from '../../components/events/EventRequestListItem';
+import { AppHeader } from '../../components/shared/AppHeader';
 
 export const unstable_settings = {
   // Make event-requests.tsx not show up in the tab bar
@@ -28,6 +29,9 @@ export default function EventRequestsScreen() {
     try {
       isLoadingRef.current = true;
       setLoading(true);
+      
+      // First cleanup expired requests
+      await EventsService.cleanupExpiredInvitationsAndRequests();
       
       const eventsWithRequests = await EventsService.getEventsWithPendingRequests();
       setEvents(eventsWithRequests);
@@ -62,17 +66,7 @@ export default function EventRequestsScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <View style={{ height: insets.top, backgroundColor: theme.background }} />
-      
-      <View style={[styles.header, { backgroundColor: theme.background }]}>
-        <Text style={[styles.headerTitle, { color: theme.text }]}>Event Requests</Text>
-        <Pressable 
-          style={styles.backButton}
-          onPress={() => router.back()}
-        >
-          <Ionicons name="arrow-back" size={24} color={theme.primary} />
-        </Pressable>
-      </View>
+      <AppHeader title="Event Requests" showBackButton={true} />
       
       {events.length === 0 && !loading ? (
         <View style={styles.emptyContainer}>
@@ -111,29 +105,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0,0,0,0.05)',
-  },
-  headerTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    fontFamily: 'Roboto',
-    flex: 1,
-    textAlign: 'center',
-  },
-  backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -148,5 +119,6 @@ const styles = StyleSheet.create({
   emptySubtext: {
     fontSize: 14,
     textAlign: 'center',
+    maxWidth: '80%',
   },
 }); 
