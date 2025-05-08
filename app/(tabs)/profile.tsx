@@ -644,12 +644,20 @@ export default function ProfileScreen() {
       }]}>
         <View style={{ width: 40 }} />
         <Text style={[styles.username, { color: theme.text }]}>{auth.currentUser?.displayName}</Text>
-        <TouchableOpacity
-          style={styles.iconButton}
-          onPress={() => router.push('/settings')}
-        >
-          <Ionicons name="settings-outline" size={24} color={theme.text} />
-        </TouchableOpacity>
+        <View style={styles.headerButtons}>
+          <TouchableOpacity
+            style={styles.iconButton}
+            onPress={() => router.push('/search')}
+          >
+            <Ionicons name="search-outline" size={24} color={theme.text} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.iconButton}
+            onPress={() => router.push('/settings')}
+          >
+            <Ionicons name="settings-outline" size={24} color={theme.text} />
+          </TouchableOpacity>
+        </View>
       </View>
       
       {viewMode === 'grid' ? (

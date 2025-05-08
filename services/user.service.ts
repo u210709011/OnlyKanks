@@ -1,6 +1,6 @@
 import { FirebaseService, collections } from './firebase.service';
 import { auth } from '../config/firebase';
-import { doc, getDoc, setDoc, updateDoc, serverTimestamp, onSnapshot, collection, query, where, Timestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, serverTimestamp, onSnapshot, collection, query, where, Timestamp, getDocs, limit, orderBy, startAt, endAt } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { deleteField } from 'firebase/firestore';
 
@@ -99,5 +99,43 @@ export class UserService {
         callback(false);
       }
     });
+  }
+
+  static async searchUsers(searchTerm: string, maxResults: number = 20): Promise<User[]> {
+    try {
+      if (!searchTerm.trim()) {
+        return [];
+      }
+      
+      // Simplify the search approach - get all users and filter client-side
+      // This is more efficient for small to medium-sized user databases
+      const usersQuery = query(
+        collection(db, collections.USERS),
+        limit(100) // Reasonable limit to avoid loading too many users
+      );
+      
+      const querySnapshot = await getDocs(usersQuery);
+      
+      if (querySnapshot.empty) {
+        return [];
+      }
+      
+      const searchTermLower = searchTerm.trim().toLowerCase();
+      
+      // Filter out the current user from results and filter by displayName
+      const currentUserId = auth.currentUser?.uid;
+      const users = querySnapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() } as User))
+        .filter(user => 
+          user.id !== currentUserId && 
+          user.displayName?.toLowerCase().includes(searchTermLower)
+        )
+        .slice(0, maxResults);
+      
+      return users;
+    } catch (error) {
+      console.error('Error searching users:', error);
+      return [];
+    }
   }
 } 
