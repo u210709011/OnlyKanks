@@ -12,6 +12,7 @@ import { EventCard } from '../../components/events/EventCard';
 import { useFocusEffect } from '@react-navigation/native';
 import { FriendsService } from '../../services/friends.service';
 import { format } from 'date-fns';
+import UserRating from '../../components/UserRating';
 
 const { width } = Dimensions.get('window');
 const GRID_SPACING = 2;
@@ -418,6 +419,9 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     fontFamily: 'Roboto',
   },
+  ratingContainer: {
+    marginBottom: 8,
+  },
 });
 
 export default function ProfileScreen() {
@@ -729,6 +733,10 @@ export default function ProfileScreen() {
                   {displayName}
                 </Text>
                 
+                <View style={styles.ratingContainer}>
+                  {currentUserId && <UserRating userId={currentUserId} />}
+                </View>
+                
                 <Text style={[styles.bio, { color: theme.text }]}>
                   {userBio || 'No bio yet.'}
                 </Text>
@@ -936,6 +944,10 @@ export default function ProfileScreen() {
                 <Text style={[styles.displayName, { color: theme.text }]}>
                   {displayName}
                 </Text>
+                
+                <View style={styles.ratingContainer}>
+                  {currentUserId && <UserRating userId={currentUserId} />}
+                </View>
                 
                 <Text style={[styles.bio, { color: theme.text }]}>
                   {userBio || 'No bio yet.'}

@@ -14,9 +14,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/theme.context';
 import { useAuth } from '../context/auth.context';
 import { CommentService, EventComment } from '../services/comment.service';
-import { db } from '../config/firebase';
-import { collections } from '../services/firebase.service';
-import { collection, addDoc, query, where, orderBy, onSnapshot, serverTimestamp, Timestamp } from 'firebase/firestore';
 
 interface EventCommentsProps {
   eventId: string;
@@ -31,41 +28,62 @@ export default function EventComments({ eventId, isParticipant }: EventCommentsP
   const [rating, setRating] = useState(0);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [averageRating, setAverageRating] = useState<number | null>(null);
+  const [userHasCommented, setUserHasCommented] = useState(false);
+  const [userComment, setUserComment] = useState<EventComment | null>(null);
   
   useEffect(() => {
     if (!eventId) return;
     
-    // Set up listener for real-time updates
-    const commentsQuery = query(
-      collection(db, collections.EVENT_COMMENTS),
-      where('eventId', '==', eventId),
-      orderBy('createdAt', 'desc')
-    );
+    const fetchCommentsAndRating = async () => {
+      try {
+        setLoading(true);
+        
+        // Fetch comments
+        const commentsData = await CommentService.getEventComments(eventId);
+        setComments(commentsData);
+        
+        // Fetch average rating
+        const avgRating = await CommentService.getAverageRating(eventId);
+        setAverageRating(avgRating);
+        
+        // Check if current user has already commented
+        if (user) {
+          const existingComment = await CommentService.getUserCommentForEvent(eventId, user.id);
+          setUserHasCommented(!!existingComment);
+          setUserComment(existingComment);
+        }
+      } catch (error) {
+        console.error("Error fetching comments data:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
     
-    const unsubscribe = onSnapshot(commentsQuery, (snapshot) => {
-      const commentsData: EventComment[] = [];
-      snapshot.forEach((doc) => {
-        const data = doc.data();
-        commentsData.push({
-          id: doc.id,
-          eventId: data.eventId,
-          userId: data.userId,
-          userName: data.userName,
-          userPhotoURL: data.userPhotoURL,
-          text: data.text,
-          rating: data.rating,
-          createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
-        });
-      });
+    fetchCommentsAndRating();
+    
+    // Set up listener for real-time updates
+    const unsubscribe = CommentService.subscribeToEventComments(eventId, async (commentsData: EventComment[]) => {
       setComments(commentsData);
-      setLoading(false);
-    }, (error) => {
-      console.error("Error getting comments: ", error);
-      setLoading(false);
+      
+      // Re-fetch average rating when comments change
+      try {
+        const avgRating = await CommentService.getAverageRating(eventId);
+        setAverageRating(avgRating);
+        
+        // Check if current user has commented
+        if (user) {
+          const existingComment = commentsData.find((c: EventComment) => c.userId === user.id);
+          setUserHasCommented(!!existingComment);
+          setUserComment(existingComment || null);
+        }
+      } catch (error) {
+        console.error("Error updating rating:", error);
+      }
     });
     
     return () => unsubscribe();
-  }, [eventId]);
+  }, [eventId, user]);
   
   const handleSubmitComment = async () => {
     if (!user) {
@@ -75,6 +93,11 @@ export default function EventComments({ eventId, isParticipant }: EventCommentsP
     
     if (!isParticipant) {
       Alert.alert('Error', 'Only participants can comment on this event');
+      return;
+    }
+    
+    if (userHasCommented) {
+      Alert.alert('Already Commented', 'You have already commented on this event. You can only comment once per event.');
       return;
     }
     
@@ -91,23 +114,28 @@ export default function EventComments({ eventId, isParticipant }: EventCommentsP
     try {
       setSubmitting(true);
       
-      // Add the comment to Firestore
-      await addDoc(collection(db, collections.EVENT_COMMENTS), {
+      await CommentService.addComment(
         eventId,
-        userId: user.id,
-        userName: user.displayName || 'Anonymous',
-        userPhotoURL: user.photoURL,
-        text: newComment.trim(),
+        newComment.trim(),
         rating,
-        createdAt: serverTimestamp(),
-      });
+        user.displayName || 'Anonymous',
+        user.photoURL
+      );
       
       // Reset the form
       setNewComment('');
       setRating(0);
+      
+      // The comment list will be updated via the listener
     } catch (error) {
       console.error('Error submitting comment:', error);
-      Alert.alert('Error', 'Failed to submit comment');
+      
+      // Show more specific error message if available
+      if (error instanceof Error) {
+        Alert.alert('Error', error.message);
+      } else {
+        Alert.alert('Error', 'Failed to submit comment');
+      }
     } finally {
       setSubmitting(false);
     }
@@ -120,7 +148,7 @@ export default function EventComments({ eventId, isParticipant }: EventCommentsP
           <Ionicons
             key={star}
             name={commentRating >= star ? 'star' : 'star-outline'}
-            size={16}
+            size={14}
             color={theme.primary}
             style={styles.starIcon}
           />
@@ -133,17 +161,18 @@ export default function EventComments({ eventId, isParticipant }: EventCommentsP
     return (
       <View style={styles.starSelectorContainer}>
         <Text style={[styles.ratingLabel, { color: theme.text }]}>Rating:</Text>
-        <View style={styles.starsContainer}>
+        <View style={styles.starSelectContainer}>
           {[1, 2, 3, 4, 5].map((star) => (
             <TouchableOpacity
               key={star}
               onPress={() => setRating(star)}
               activeOpacity={0.7}
+              disabled={userHasCommented}
             >
               <Ionicons
                 name={rating >= star ? 'star' : 'star-outline'}
                 size={24}
-                color={theme.primary}
+                color={userHasCommented ? theme.text + '40' : theme.primary}
                 style={styles.starSelectIcon}
               />
             </TouchableOpacity>
@@ -157,7 +186,11 @@ export default function EventComments({ eventId, isParticipant }: EventCommentsP
     const isCurrentUser = user && item.userId === user.id;
     
     return (
-      <View style={[styles.commentItem, { backgroundColor: theme.card }]}>
+      <View style={[
+        styles.commentItem, 
+        { backgroundColor: theme.card },
+        isCurrentUser && styles.currentUserComment
+      ]}>
         <View style={styles.commentHeader}>
           <View style={styles.userInfoContainer}>
             {item.userPhotoURL ? (
@@ -171,19 +204,45 @@ export default function EventComments({ eventId, isParticipant }: EventCommentsP
             )}
             <View>
               <Text style={[styles.userName, { color: theme.text }]}>
-                {item.userName}
+                {item.userName} {isCurrentUser ? '(You)' : ''}
               </Text>
               <Text style={[styles.commentDate, { color: theme.text + '80' }]}>
                 {item.createdAt.toLocaleDateString()} {item.createdAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
               </Text>
             </View>
           </View>
-          {renderStarRating(item.rating)}
         </View>
         
         <Text style={[styles.commentText, { color: theme.text }]}>
           {item.text}
         </Text>
+        
+        <View style={styles.commentFooter}>
+          {renderStarRating(item.rating)}
+        </View>
+      </View>
+    );
+  };
+  
+  const renderAverageRating = () => {
+    if (averageRating === null) return null;
+    
+    return (
+      <View style={styles.averageRatingContainer}>
+        <Text style={[styles.averageRatingValue, { color: theme.text }]}>
+          {averageRating.toFixed(1)}
+        </Text>
+        <View style={styles.averageStars}>
+          {[1, 2, 3, 4, 5].map((star) => (
+            <Ionicons
+              key={star}
+              name={averageRating >= star ? 'star' : averageRating >= star - 0.5 ? 'star-half' : 'star-outline'}
+              size={20}
+              color={theme.primary}
+              style={{ marginHorizontal: 1 }}
+            />
+          ))}
+        </View>
       </View>
     );
   };
@@ -204,33 +263,60 @@ export default function EventComments({ eventId, isParticipant }: EventCommentsP
         </Text>
       </View>
       
+      {/* Average Rating */}
+      {averageRating !== null && (
+        <View style={[styles.ratingHeaderContainer, { backgroundColor: theme.card + '30' }]}>
+          <Text style={[styles.ratingHeaderLabel, { color: theme.text }]}>
+            Event Rating
+          </Text>
+          {renderAverageRating()}
+        </View>
+      )}
+      
       {isParticipant && (
         <View style={[styles.commentInputContainer, { backgroundColor: theme.card }]}>
-          {renderStarSelector()}
-          <TextInput
-            style={[styles.commentInput, { 
-              backgroundColor: theme.input, 
-              color: theme.text,
-              borderColor: theme.border,
-            }]}
-            placeholder="Write a comment..."
-            placeholderTextColor={theme.text + '60'}
-            value={newComment}
-            onChangeText={setNewComment}
-            multiline
-            maxLength={500}
-          />
-          <TouchableOpacity
-            style={[styles.submitButton, { backgroundColor: theme.primary }]}
-            onPress={handleSubmitComment}
-            disabled={submitting || newComment.trim() === '' || rating === 0}
-          >
-            {submitting ? (
-              <ActivityIndicator color="white" size="small" />
-            ) : (
-              <Text style={styles.submitButtonText}>Post</Text>
-            )}
-          </TouchableOpacity>
+          {userHasCommented ? (
+            <View style={styles.alreadyCommentedContainer}>
+              <Ionicons name="checkmark-circle" size={20} color={theme.primary} />
+              <Text style={[styles.alreadyCommentedText, { color: theme.text }]}>
+                You've already rated this event ({userComment?.rating}/5)
+              </Text>
+            </View>
+          ) : (
+            <>
+              {renderStarSelector()}
+              <TextInput
+                style={[styles.commentInput, { 
+                  backgroundColor: theme.input, 
+                  color: theme.text,
+                  borderColor: theme.border,
+                }]}
+                placeholder="Write a comment..."
+                placeholderTextColor={theme.text + '60'}
+                value={newComment}
+                onChangeText={setNewComment}
+                multiline
+                maxLength={500}
+                editable={!userHasCommented}
+              />
+              <TouchableOpacity
+                style={[
+                  styles.submitButton, 
+                  { backgroundColor: theme.primary },
+                  (submitting || newComment.trim() === '' || rating === 0 || userHasCommented) && 
+                    { opacity: 0.5 }
+                ]}
+                onPress={handleSubmitComment}
+                disabled={submitting || newComment.trim() === '' || rating === 0 || userHasCommented}
+              >
+                {submitting ? (
+                  <ActivityIndicator color="white" size="small" />
+                ) : (
+                  <Text style={styles.submitButtonText}>Post</Text>
+                )}
+              </TouchableOpacity>
+            </>
+          )}
         </View>
       )}
       
@@ -240,12 +326,13 @@ export default function EventComments({ eventId, isParticipant }: EventCommentsP
           renderItem={renderComment}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.commentsList}
+          scrollEnabled={false}
         />
       ) : (
         <View style={styles.emptyContainer}>
           <Ionicons name="chatbubble-outline" size={48} color={theme.text + '40'} />
           <Text style={[styles.emptyText, { color: theme.text + '80' }]}>
-            No comments yet. {isParticipant ? 'Be the first to comment!' : ''}
+            No comments yet. {isParticipant && !userHasCommented ? 'Be the first to comment!' : ''}
           </Text>
         </View>
       )}
@@ -282,19 +369,22 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
   },
   starSelectorContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
     marginBottom: 12,
   },
   ratingLabel: {
     fontSize: 16,
     fontWeight: '500',
-    marginRight: 10,
+    marginBottom: 6,
     fontFamily: 'Roboto',
   },
   starsContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+  },
+  starSelectContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
   },
   starIcon: {
     marginRight: 2,
@@ -330,6 +420,10 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 12,
     marginBottom: 12,
+  },
+  currentUserComment: {
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
   },
   commentHeader: {
     flexDirection: 'row',
@@ -379,5 +473,48 @@ const styles = StyleSheet.create({
     fontSize: 16,
     textAlign: 'center',
     fontFamily: 'Roboto',
+  },
+  averageRatingContainer: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  averageRatingValue: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    marginBottom: 4,
+    fontFamily: 'Roboto',
+  },
+  averageStars: {
+    flexDirection: 'row',
+  },
+  ratingHeaderContainer: {
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    marginHorizontal: 16,
+  },
+  ratingHeaderLabel: {
+    fontSize: 14,
+    marginBottom: 6,
+    fontFamily: 'Roboto',
+    fontWeight: '500',
+  },
+  alreadyCommentedContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  alreadyCommentedText: {
+    fontSize: 16,
+    marginLeft: 8,
+    fontFamily: 'Roboto',
+  },
+  commentFooter: {
+    marginTop: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
 }); 

@@ -28,6 +28,8 @@ import { FriendsService } from '../../services/friends.service';
 import { EventsService } from '../../services/events.service';
 import EventPhotos from '../../components/EventPhotos';
 import EventComments from '../../components/EventComments';
+import { CommentService } from '../../services/comment.service';
+import UserRating from '../../components/UserRating';
 
 // Define a type for creator data
 interface CreatorData {
@@ -79,6 +81,7 @@ export default function EventScreen() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [isExpired, setIsExpired] = useState(false);
   const [userPhotoMap, setUserPhotoMap] = useState<{[key: string]: string | null}>({});
+  const [eventRating, setEventRating] = useState<number | null>(null);
   
   // State variables for adding participants
   const [showAddModal, setShowAddModal] = useState(false);
@@ -191,6 +194,14 @@ export default function EventScreen() {
             photoURL: null,
             bio: ''
           });
+        }
+        
+        // Fetch event rating
+        try {
+          const avgRating = await CommentService.getAverageRating(eventData.id);
+          setEventRating(avgRating);
+        } catch (error) {
+          console.error('Error fetching event rating:', error);
         }
       } else {
         setError('Event not found');
@@ -629,6 +640,30 @@ export default function EventScreen() {
     }
   };
 
+  // Add this function to render event rating
+  const renderEventRating = () => {
+    if (eventRating === null) return null;
+    
+    return (
+      <View style={styles.eventRatingContainer}>
+        <Text style={[styles.ratingNumber, { color: theme.text }]}>
+          {eventRating.toFixed(1)}
+        </Text>
+        <View style={styles.ratingStars}>
+          {[1, 2, 3, 4, 5].map((star) => (
+            <Ionicons
+              key={star}
+              name={eventRating >= star ? 'star' : eventRating >= star - 0.5 ? 'star-half' : 'star-outline'}
+              size={18}
+              color={theme.primary}
+              style={{ marginHorizontal: 1 }}
+            />
+          ))}
+        </View>
+      </View>
+    );
+  };
+
   if (loading) {
     return (
       <View style={[styles.container, { backgroundColor: theme.background }]}>
@@ -683,7 +718,12 @@ export default function EventScreen() {
         )}
 
         <View style={styles.content}>
-          <Text style={[styles.title, { color: isExpired ? theme.text + '80' : theme.text }]}>{event.title}</Text>
+          <View style={styles.titleContainer}>
+            <Text style={[styles.title, { color: isExpired ? theme.text + '80' : theme.text }]}>
+              {event.title}
+            </Text>
+            {renderEventRating()}
+          </View>
           
           {/* Creator information */}
           <Pressable 
@@ -703,9 +743,12 @@ export default function EventScreen() {
                 </Text>
               </View>
             )}
-            <Text style={[styles.creatorName, { color: theme.text }]}>
-              By {creator?.displayName || 'Unknown User'}
-            </Text>
+            <View style={styles.creatorDetails}>
+              <Text style={[styles.creatorName, { color: theme.text }]}>
+                By {creator?.displayName || 'Unknown User'}
+              </Text>
+              {event.createdBy && <UserRating userId={event.createdBy} />}
+            </View>
           </Pressable>
 
           {/* Event info */}
@@ -1338,10 +1381,17 @@ const styles = StyleSheet.create({
   content: {
     padding: 16,
   },
+  titleContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
   title: {
     fontSize: 24,
     fontWeight: 'bold',
-    marginBottom: 16,
+    marginBottom: 0,
+    flex: 1,
     fontFamily: 'Roboto',
   },
   creatorContainer: {
@@ -1354,6 +1404,9 @@ const styles = StyleSheet.create({
     height: 32,
     borderRadius: 16,
     marginRight: 8,
+  },
+  creatorDetails: {
+    flex: 1,
   },
   creatorName: {
     fontSize: 14,
@@ -1707,6 +1760,23 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     padding: 16,
     borderRadius: 12,
+  },
+  eventRatingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.05)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
+  },
+  ratingNumber: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginRight: 4,
+    fontFamily: 'Roboto',
+  },
+  ratingStars: {
+    flexDirection: 'row',
   },
 });
 
