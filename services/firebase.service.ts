@@ -20,6 +20,7 @@ export const collections = {
   FRIEND_REQUESTS: 'friendRequests',
   FRIENDS: 'friends',
   INVITATIONS: 'invitations',
+  EVENT_PHOTOS: 'eventPhotos',
 } as const;
 
 export class FirebaseService {

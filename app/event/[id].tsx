@@ -26,6 +26,7 @@ import { useAuth } from '../../context/auth.context';
 import { CustomButton } from '../../components/shared/CustomButton';
 import { FriendsService } from '../../services/friends.service';
 import { EventsService } from '../../services/events.service';
+import EventPhotos from '../../components/EventPhotos';
 
 // Define a type for creator data
 interface CreatorData {
@@ -815,11 +816,17 @@ export default function EventScreen() {
             </View>
           </View>
 
-          {/* Event description */}
-          <Text style={[styles.sectionTitle, { color: theme.text }]}>About</Text>
-          <Text style={[styles.description, { color: theme.text }]}>
-            {event.description || 'No description provided'}
-          </Text>
+          {/* Event Details */}
+          <View style={[styles.section, { backgroundColor: theme.card }]}>
+            <Text style={[styles.sectionTitle, { color: theme.text }]}>About</Text>
+            <Text style={[styles.description, { color: theme.text }]}>{event.description}</Text>
+          </View>
+
+          {/* Event Photos */}
+          <View style={[styles.section, { backgroundColor: theme.card }]}>
+            <Text style={[styles.sectionTitle, { color: theme.text }]}>Photos</Text>
+            <EventPhotos eventId={event.id} />
+          </View>
 
           {/* Invited Participants section - only visible to event creator */}
           {isEventCreator && invitedParticipants.length > 0 && (
@@ -1683,6 +1690,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontStyle: 'italic',
     fontFamily: 'Roboto',
+  },
+  section: {
+    marginBottom: 16,
+    padding: 16,
+    borderRadius: 12,
   },
 });
 
