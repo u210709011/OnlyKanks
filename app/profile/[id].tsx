@@ -1,11 +1,11 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, Pressable, ActivityIndicator, FlatList, Dimensions } from 'react-native';
+import React, { useEffect, useState, useCallback } from 'react';
+import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, Pressable, ActivityIndicator, FlatList, Dimensions, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/theme.context';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { auth, db } from '../../config/firebase';
-import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
+import { collection, query, where, getDocs, orderBy, getDoc } from 'firebase/firestore';
 import { Event, EventsService } from '../../services/events.service';
 import { MessagesService } from '../../services/messages.service';
 import { FriendsService, FriendRequestStatus } from '../../services/friends.service';
@@ -18,7 +18,7 @@ const { width } = Dimensions.get('window');
 const GRID_SPACING = 2;
 const NUM_COLUMNS = 3;
 const GRID_GAP = 8; // Horizontal and vertical gap between grid items
-const ITEM_WIDTH = (width - 32 - (NUM_COLUMNS - 1) * GRID_GAP) / NUM_COLUMNS;
+const ITEM_WIDTH = (width - (NUM_COLUMNS - 1) * GRID_GAP - 32) / NUM_COLUMNS;
 
 type ViewMode = 'grid' | 'list';
 
@@ -35,6 +35,7 @@ export default function UserProfileScreen() {
   const [friendsCount, setFriendsCount] = useState<number>(0);
   const [attendingCount, setAttendingCount] = useState<number>(0);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [friendshipStatus, setFriendshipStatus] = useState<'none' | 'sent' | 'received' | 'friends'>('none');
   const [friendRequestId, setFriendRequestId] = useState<string | undefined>(undefined);
@@ -51,74 +52,89 @@ export default function UserProfileScreen() {
     }
   }, [userId]);
 
-  useEffect(() => {
-    const fetchUserProfile = async () => {
-      try {
-        if (!userId) {
-          setError('User not found');
-          setLoading(false);
-          return;
-        }
-        
-        // Get user data
-        const userData = await UserService.getUser(userId);
-        if (userData) {
-          setUser(userData);
-          setDisplayName(userData.displayName || 'User');
-          setProfileImage(userData.photoURL || null);
-          setUserBio(userData.bio || '');
-        } else {
-          setError('User not found');
-          setLoading(false);
-          return;
-        }
-        
-        // Fetch user's events
-        try {
-          const eventsQuery = query(
-            collection(db, 'events'),
-            where('createdBy', '==', userId)
-          );
-          const eventsSnapshot = await getDocs(eventsQuery);
-          const eventsData = eventsSnapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-          } as Event));
-          setUserEvents(eventsData);
-        } catch (error) {
-          console.error('Error fetching user events:', error);
-        }
-        
-        // Fetch friends count
-        try {
-          const count = await FriendsService.getFriendsCount(userId);
-          setFriendsCount(count);
-        } catch (error) {
-          console.error('Error fetching friends count:', error);
-        }
-        
-        // Fetch attended events count
-        try {
-          const count = await EventsService.getAttendingEventsCount(userId);
-          setAttendingCount(count);
-        } catch (error) {
-          console.error('Error fetching attending events count:', error);
-        }
-        
-        // Fetch friendship status if viewing someone else's profile
-        if (auth.currentUser) {
-          const status = await FriendsService.getFriendRequestStatus(userId);
-          setFriendshipStatus(status.status);
-          setFriendRequestId(status.requestId);
-        }
-      } catch (error) {
-        console.error('Error fetching user profile:', error);
-        setError('Error loading profile');
-      } finally {
-        setLoading(false);
+  // Function to fetch user profile data
+  const fetchUserProfile = async (showLoader = true) => {
+    try {
+      if (showLoader) {
+        setLoading(true);
       }
-    };
-    
+      
+      if (!userId) {
+        setError('User not found');
+        setLoading(false);
+        setRefreshing(false);
+        return;
+      }
+      
+      // Get user data
+      const userData = await UserService.getUser(userId);
+      if (userData) {
+        setUser(userData);
+        setDisplayName(userData.displayName || 'User');
+        setProfileImage(userData.photoURL || null);
+        setUserBio(userData.bio || '');
+      } else {
+        setError('User not found');
+        setLoading(false);
+        setRefreshing(false);
+        return;
+      }
+      
+      // Fetch user's events
+      try {
+        const eventsQuery = query(
+          collection(db, 'events'),
+          where('createdBy', '==', userId)
+        );
+        const eventsSnapshot = await getDocs(eventsQuery);
+        const eventsData = eventsSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        } as Event));
+        setUserEvents(eventsData);
+      } catch (error) {
+        console.error('Error fetching user events:', error);
+      }
+      
+      // Fetch friends count
+      try {
+        const count = await FriendsService.getFriendsCount(userId);
+        setFriendsCount(count);
+      } catch (error) {
+        console.error('Error fetching friends count:', error);
+      }
+      
+      // Fetch attended events count
+      try {
+        const count = await EventsService.getAttendingEventsCount(userId);
+        setAttendingCount(count);
+      } catch (error) {
+        console.error('Error fetching attending events count:', error);
+      }
+      
+      // Fetch friendship status if viewing someone else's profile
+      if (auth.currentUser) {
+        const status = await FriendsService.getFriendRequestStatus(userId);
+        setFriendshipStatus(status.status);
+        setFriendRequestId(status.requestId);
+      }
+    } catch (error) {
+      console.error('Error fetching user profile:', error);
+      setError('Error loading profile');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  // Refresh handler for pull-to-refresh
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    fetchUserProfile(false);
+  }, [userId]);
+
+  // Fetch on mount only
+  useEffect(() => {
     fetchUserProfile();
   }, [userId]);
 
@@ -228,8 +244,9 @@ export default function UserProfileScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
+      {/* Header with profile title and back button */}
       <View style={[styles.header, { 
-        paddingTop: insets.top + 15,
+        paddingTop: insets.top,
         backgroundColor: theme.background,
         borderBottomColor: theme.border,
         borderBottomWidth: 1
@@ -246,7 +263,7 @@ export default function UserProfileScreen() {
       
       {viewMode === 'grid' ? (
         <FlatList
-          key={`grid-${viewMode}`}
+          key="grid"
           data={[...userEvents].sort((a, b) => {
             const dateA = a.date.toDate ? a.date.toDate() : new Date(a.date);
             const dateB = b.date.toDate ? b.date.toDate() : new Date(b.date);
@@ -255,42 +272,40 @@ export default function UserProfileScreen() {
           renderItem={({ item, index }) => {
             // Calculate the column position
             const column = index % NUM_COLUMNS;
-            // Apply appropriate margin
-            const marginRight = column < NUM_COLUMNS - 1 ? GRID_GAP : 0;
-            
             return (
               <TouchableOpacity
-                style={{
-                  width: ITEM_WIDTH,
-                  height: ITEM_WIDTH,
-                  marginRight,
-                  marginBottom: GRID_GAP,
-                  borderRadius: 8,
-                  overflow: 'hidden',
-                }}
+                style={[
+                  styles.gridItem, 
+                  { 
+                    width: ITEM_WIDTH,
+                    marginLeft: column > 0 ? GRID_GAP : 0 
+                  }
+                ]}
                 onPress={() => router.push(`/event/${item.id}`)}
               >
                 {item.imageUrl ? (
                   <Image
                     source={{ uri: item.imageUrl }}
-                    style={{ width: '100%', height: '100%' }}
-                    resizeMode="cover"
+                    style={styles.gridItemImage}
                   />
                 ) : (
-                  <View style={[styles.noImageContainer, { backgroundColor: theme.border }]}>
-                    <Ionicons name="image-outline" size={24} color={theme.text} />
+                  <View style={[styles.noImageContainer, { backgroundColor: theme.card }]}>
+                    <Ionicons name="calendar-outline" size={24} color={theme.primary} />
                   </View>
                 )}
               </TouchableOpacity>
             );
           }}
-          numColumns={NUM_COLUMNS}
-          columnWrapperStyle={{ marginHorizontal: 16 }}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={{ 
-            paddingBottom: insets.bottom + 20,
-            paddingTop: 16
-          }}
+          numColumns={NUM_COLUMNS}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[theme.primary]}
+              tintColor={theme.primary}
+            />
+          }
           ListHeaderComponent={() => (
             <View style={styles.profileSection}>
               <View style={styles.profileHeader}>
@@ -343,7 +358,7 @@ export default function UserProfileScreen() {
                     onPress={handleSendFriendRequest}
                     style={{ flex: 1, marginRight: 8 }}
                     loading={friendActionLoading}
-                    icon={<Ionicons name="person-add-outline" size={18} color="white" style={{ marginRight: 8 }} />}
+                    icon="person-add-outline"
                   />
                 )}
                 
@@ -354,6 +369,7 @@ export default function UserProfileScreen() {
                     style={{ flex: 1, marginRight: 8 }}
                     secondary
                     loading={friendActionLoading}
+                    icon="close-circle-outline"
                   />
                 )}
                 
@@ -364,7 +380,7 @@ export default function UserProfileScreen() {
                       onPress={handleAcceptFriendRequest}
                       style={{ flex: 1, marginRight: 8 }}
                       loading={friendActionLoading}
-                      icon={<Ionicons name="checkmark" size={18} color="white" style={{ marginRight: 8 }} />}
+                      icon="checkmark"
                     />
                     <CustomButton 
                       title="Reject"
@@ -372,7 +388,7 @@ export default function UserProfileScreen() {
                       style={{ flex: 1 }}
                       secondary
                       loading={friendActionLoading}
-                      icon={<Ionicons name="close" size={18} color={theme.text} style={{ marginRight: 8 }} />}
+                      icon="close"
                     />
                   </>
                 )}
@@ -384,7 +400,7 @@ export default function UserProfileScreen() {
                     style={{ flex: 1, marginRight: 8 }}
                     secondary
                     loading={friendActionLoading}
-                    icon={<Ionicons name="person-remove-outline" size={18} color={theme.text} style={{ marginRight: 8 }} />}
+                    icon="person-remove-outline"
                   />
                 )}
                 
@@ -392,39 +408,46 @@ export default function UserProfileScreen() {
                   title="Message"
                   onPress={handleMessage}
                   style={{ flex: 1 }}
-                  icon={<Ionicons name="chatbubble-outline" size={18} color="white" style={{ marginRight: 8 }} />}
+                  icon="chatbubble-outline"
                   secondary={friendshipStatus === 'received'}
                 />
               </View>
               
-              <View style={styles.viewToggleContainer}>
-                <TouchableOpacity
-                  style={[
-                    styles.viewToggleButton,
-                    { backgroundColor: viewMode === 'grid' ? theme.primary : theme.card }
-                  ]}
-                  onPress={() => setViewMode('grid')}
-                >
-                  <Ionicons 
-                    name="grid-outline" 
-                    size={18} 
-                    color={viewMode === 'grid' ? 'white' : theme.text} 
-                  />
+              {/* Tabs for Events */}
+              <View style={[styles.tabsContainer, { borderBottomColor: theme.border }]}>
+                <TouchableOpacity style={[styles.tabButton, styles.activeTab, { borderBottomColor: theme.primary }]}>
+                  <Ionicons name="calendar" size={24} color={theme.primary} />
                 </TouchableOpacity>
                 
-                <TouchableOpacity
-                  style={[
-                    styles.viewToggleButton,
-                    { backgroundColor: viewMode === 'list' ? theme.primary : theme.card }
-                  ]}
-                  onPress={() => setViewMode('list')}
-                >
-                  <Ionicons 
-                    name="list-outline" 
-                    size={18} 
-                    color={viewMode === 'list' ? 'white' : theme.text} 
-                  />
-                </TouchableOpacity>
+                <View style={[styles.viewToggle, { backgroundColor: theme.card }]}>
+                  <TouchableOpacity
+                    style={[
+                      styles.toggleButton,
+                      viewMode === 'grid' && { backgroundColor: theme.primary }
+                    ]}
+                    onPress={() => setViewMode('grid')}
+                  >
+                    <Ionicons 
+                      name="grid" 
+                      size={18} 
+                      color={viewMode === 'grid' ? 'white' : theme.text}
+                    />
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity
+                    style={[
+                      styles.toggleButton,
+                      viewMode === 'list' && { backgroundColor: theme.primary }
+                    ]}
+                    onPress={() => setViewMode('list')}
+                  >
+                    <Ionicons 
+                      name="list" 
+                      size={18} 
+                      color={viewMode === 'list' ? 'white' : theme.text}
+                    />
+                  </TouchableOpacity>
+                </View>
               </View>
               
               {userEvents.length === 0 && (
@@ -443,10 +466,14 @@ export default function UserProfileScreen() {
           ListEmptyComponent={userEvents.length > 0 ? null : (
             <View style={{ height: 100 }} />
           )}
+          contentContainerStyle={{ 
+            paddingBottom: insets.bottom + 20,
+            paddingHorizontal: 16
+          }}
         />
       ) : (
         <FlatList
-          key={`list-${viewMode}`}
+          key="list"
           data={[...userEvents].sort((a, b) => {
             const dateA = a.date.toDate ? a.date.toDate() : new Date(a.date);
             const dateB = b.date.toDate ? b.date.toDate() : new Date(b.date);
@@ -456,6 +483,14 @@ export default function UserProfileScreen() {
             <EventCard event={item} />
           )}
           keyExtractor={(item) => item.id}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[theme.primary]}
+              tintColor={theme.primary}
+            />
+          }
           contentContainerStyle={{ 
             paddingBottom: insets.bottom + 20,
             paddingHorizontal: 16
@@ -512,7 +547,7 @@ export default function UserProfileScreen() {
                     onPress={handleSendFriendRequest}
                     style={{ flex: 1, marginRight: 8 }}
                     loading={friendActionLoading}
-                    icon={<Ionicons name="person-add-outline" size={18} color="white" style={{ marginRight: 8 }} />}
+                    icon="person-add-outline"
                   />
                 )}
                 
@@ -523,6 +558,7 @@ export default function UserProfileScreen() {
                     style={{ flex: 1, marginRight: 8 }}
                     secondary
                     loading={friendActionLoading}
+                    icon="close-circle-outline"
                   />
                 )}
                 
@@ -533,7 +569,7 @@ export default function UserProfileScreen() {
                       onPress={handleAcceptFriendRequest}
                       style={{ flex: 1, marginRight: 8 }}
                       loading={friendActionLoading}
-                      icon={<Ionicons name="checkmark" size={18} color="white" style={{ marginRight: 8 }} />}
+                      icon="checkmark"
                     />
                     <CustomButton 
                       title="Reject"
@@ -541,7 +577,7 @@ export default function UserProfileScreen() {
                       style={{ flex: 1 }}
                       secondary
                       loading={friendActionLoading}
-                      icon={<Ionicons name="close" size={18} color={theme.text} style={{ marginRight: 8 }} />}
+                      icon="close"
                     />
                   </>
                 )}
@@ -553,7 +589,7 @@ export default function UserProfileScreen() {
                     style={{ flex: 1, marginRight: 8 }}
                     secondary
                     loading={friendActionLoading}
-                    icon={<Ionicons name="person-remove-outline" size={18} color={theme.text} style={{ marginRight: 8 }} />}
+                    icon="person-remove-outline"
                   />
                 )}
                 
@@ -561,39 +597,46 @@ export default function UserProfileScreen() {
                   title="Message"
                   onPress={handleMessage}
                   style={{ flex: 1 }}
-                  icon={<Ionicons name="chatbubble-outline" size={18} color="white" style={{ marginRight: 8 }} />}
+                  icon="chatbubble-outline"
                   secondary={friendshipStatus === 'received'}
                 />
               </View>
               
-              <View style={styles.viewToggleContainer}>
-                <TouchableOpacity
-                  style={[
-                    styles.viewToggleButton,
-                    { backgroundColor: viewMode === 'grid' ? theme.primary : theme.card }
-                  ]}
-                  onPress={() => setViewMode('grid')}
-                >
-                  <Ionicons 
-                    name="grid-outline" 
-                    size={18} 
-                    color={viewMode === 'grid' ? 'white' : theme.text} 
-                  />
+              {/* Tabs for Events */}
+              <View style={[styles.tabsContainer, { borderBottomColor: theme.border }]}>
+                <TouchableOpacity style={[styles.tabButton, styles.activeTab, { borderBottomColor: theme.primary }]}>
+                  <Ionicons name="calendar" size={24} color={theme.primary} />
                 </TouchableOpacity>
                 
-                <TouchableOpacity
-                  style={[
-                    styles.viewToggleButton,
-                    { backgroundColor: viewMode === 'list' ? theme.primary : theme.card }
-                  ]}
-                  onPress={() => setViewMode('list')}
-                >
-                  <Ionicons 
-                    name="list-outline" 
-                    size={18} 
-                    color={viewMode === 'list' ? 'white' : theme.text} 
-                  />
-                </TouchableOpacity>
+                <View style={[styles.viewToggle, { backgroundColor: theme.card }]}>
+                  <TouchableOpacity
+                    style={[
+                      styles.toggleButton,
+                      viewMode === 'grid' && { backgroundColor: theme.primary }
+                    ]}
+                    onPress={() => setViewMode('grid')}
+                  >
+                    <Ionicons 
+                      name="grid" 
+                      size={18} 
+                      color={viewMode === 'grid' ? 'white' : theme.text}
+                    />
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity
+                    style={[
+                      styles.toggleButton,
+                      viewMode === 'list' && { backgroundColor: theme.primary }
+                    ]}
+                    onPress={() => setViewMode('list')}
+                  >
+                    <Ionicons 
+                      name="list" 
+                      size={18} 
+                      color={viewMode === 'list' ? 'white' : theme.text}
+                    />
+                  </TouchableOpacity>
+                </View>
               </View>
             </View>
           )}
@@ -662,11 +705,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  profileImageText: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    fontFamily: 'Roboto',
-  },
   displayName: {
     fontSize: 18,
     fontWeight: 'bold',
@@ -697,31 +735,8 @@ const styles = StyleSheet.create({
     fontFamily: 'Roboto',
   },
   actionButtons: {
-    marginTop: 8,
-  },
-  actionButton: {
-    marginVertical: 8,
-  },
-  rowButtons: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  halfButton: {
-    flex: 0.48,
-  },
-  messageButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
-    borderRadius: 8,
     marginTop: 8,
-  },
-  messageButtonText: {
-    marginLeft: 8,
-    fontSize: 14,
-    fontWeight: '500',
-    fontFamily: 'Roboto',
   },
   tabsContainer: {
     flexDirection: 'row',
@@ -735,7 +750,6 @@ const styles = StyleSheet.create({
   },
   activeTab: {
     borderBottomWidth: 2,
-    borderBottomColor: '#5C6BC0',
   },
   viewToggle: {
     flexDirection: 'row',
@@ -748,30 +762,16 @@ const styles = StyleSheet.create({
     width: 36,
     alignItems: 'center',
   },
-  gridContainer: {
-    paddingHorizontal: 16,
-  },
-  gridRow: {
-    justifyContent: 'space-between',
-    marginBottom: GRID_SPACING,
-  },
   gridItem: {
     aspectRatio: 1,
     borderRadius: 8,
     overflow: 'hidden',
-    marginBottom: GRID_GAP, // Use the same gap for vertical spacing
+    marginBottom: GRID_GAP,
   },
   gridItemImage: {
     width: '100%',
     height: '100%',
     resizeMode: 'cover',
-  },
-  gridItemPlaceholder: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   emptyEventsContainer: {
     alignItems: 'center',
@@ -807,16 +807,6 @@ const styles = StyleSheet.create({
   },
   ratingContainer: {
     marginVertical: 6,
-  },
-  viewToggleContainer: {
-    flexDirection: 'row',
-    marginTop: 16,
-    borderBottomWidth: 1,
-  },
-  viewToggleButton: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 12,
   },
   noImageContainer: {
     width: '100%',

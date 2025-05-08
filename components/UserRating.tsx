@@ -4,23 +4,44 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/theme.context';
 import { CommentService } from '../services/comment.service';
 
+// Static cache to store ratings
+const ratingsCache: { [userId: string]: number | null } = {};
+
 interface UserRatingProps {
   userId: string;
+  rating?: number | null; // Optional rating prop - if provided, skip fetch
 }
 
-export default function UserRating({ userId }: UserRatingProps) {
+export default function UserRating({ userId, rating: providedRating }: UserRatingProps) {
   const { theme } = useTheme();
-  const [rating, setRating] = useState<number | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [rating, setRating] = useState<number | null>(providedRating !== undefined ? providedRating : null);
+  const [loading, setLoading] = useState(providedRating !== undefined ? false : !ratingsCache[userId]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    // If rating was provided as prop, use it and skip fetch
+    if (providedRating !== undefined) {
+      setRating(providedRating);
+      return;
+    }
+
+    // If rating exists in cache, use it
+    if (ratingsCache[userId] !== undefined) {
+      setRating(ratingsCache[userId]);
+      setLoading(false);
+      return;
+    }
+
     const fetchUserRating = async () => {
       if (!userId) return;
       
       try {
         setLoading(true);
         const userRating = await CommentService.getUserRating(userId);
+        
+        // Store in cache
+        ratingsCache[userId] = userRating;
+        
         setRating(userRating);
       } catch (error) {
         console.error('Error fetching user rating:', error);
@@ -31,7 +52,7 @@ export default function UserRating({ userId }: UserRatingProps) {
     };
 
     fetchUserRating();
-  }, [userId]);
+  }, [userId, providedRating]);
 
   if (loading) {
     return (

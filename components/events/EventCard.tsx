@@ -11,6 +11,7 @@ import { useAuth } from '../../context/auth.context';
 import { Event, Participant, ParticipantType, AttendeeStatus } from '../../services/events.service';
 import { UserService } from '../../services/user.service';
 import { BlurView } from 'expo-blur';
+import { CommentService } from '../../services/comment.service';
 
 interface EventCardProps {
   event: Event;
@@ -55,6 +56,7 @@ export const EventCard: React.FC<EventCardProps> = ({ event, onPress }) => {
   const [isJoining, setIsJoining] = useState(false);
   const [isExpired, setIsExpired] = useState(false);
   const [isInvited, setIsInvited] = useState(false);
+  const [eventRating, setEventRating] = useState<number | null>(null);
 
   useEffect(() => {
     // Check if event is expired (current time is after event time + duration)
@@ -95,6 +97,18 @@ export const EventCard: React.FC<EventCardProps> = ({ event, onPress }) => {
       fetchCreator();
     }
 
+    // Fetch event rating
+    const fetchEventRating = async () => {
+      try {
+        const avgRating = await CommentService.getAverageRating(event.id);
+        setEventRating(avgRating);
+      } catch (error) {
+        console.error('Error fetching event rating:', error);
+      }
+    };
+    
+    fetchEventRating();
+
     // Check if user has already requested to join this event or has been invited
     if (user && event.participants) {
       const userParticipant = event.participants.find(
@@ -112,7 +126,7 @@ export const EventCard: React.FC<EventCardProps> = ({ event, onPress }) => {
         }
       }
     }
-  }, [event.createdBy, event.participants, user, event.date, event.duration]);
+  }, [event.createdBy, event.participants, user, event.date, event.duration, event.id]);
 
   const handlePress = () => {
     if (onPress) {
@@ -284,7 +298,11 @@ export const EventCard: React.FC<EventCardProps> = ({ event, onPress }) => {
         <View style={styles.imageBadges}>
           <View style={[
             styles.dateBadge, 
-            { backgroundColor: isExpired ? theme.text + '80' : theme.primary }
+            { 
+              backgroundColor: isExpired ? '#333333' : theme.primary,
+              shadowOpacity: isExpired ? 0 : 0.3,
+              elevation: isExpired ? 0 : 5
+            }
           ]}>
             <Text style={styles.dateDay}>
               {format(eventDate, 'd')}
@@ -306,6 +324,15 @@ export const EventCard: React.FC<EventCardProps> = ({ event, onPress }) => {
             </View>
           )}
         </View>
+        
+        {eventRating !== null && (
+          <View style={[styles.ratingBadge, { backgroundColor: theme.background }]}>
+            <Text style={[styles.ratingText, { color: theme.text }]}>
+              {eventRating.toFixed(1)}
+            </Text>
+            <Ionicons name="star" size={12} color={theme.primary} style={{ marginLeft: 2 }} />
+          </View>
+        )}
       </View>
 
       <View style={styles.content}>
@@ -630,5 +657,19 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: 'bold',
     fontFamily: 'Roboto',
+  },
+  ratingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 12,
+    position: 'absolute',
+    top: 8,
+    left: 8,
+  },
+  ratingText: {
+    fontSize: 12,
+    fontWeight: 'bold',
   },
 }); 

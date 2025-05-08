@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, Pressable, ActivityIndicator, FlatList, Dimensions, Alert } from 'react-native';
+import React, { useEffect, useState, useCallback } from 'react';
+import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, Pressable, ActivityIndicator, FlatList, Dimensions, Alert, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/theme.context';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -437,6 +437,7 @@ export default function ProfileScreen() {
   const [friendsCount, setFriendsCount] = useState<number>(0);
   const [attendingCount, setAttendingCount] = useState<number>(0);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [invitedEvents, setInvitedEvents] = useState<Event[]>([]);
@@ -454,13 +455,16 @@ export default function ProfileScreen() {
   }, [paramId, currentUserId]);
 
   // Function to fetch user profile data
-  const fetchUserProfile = async () => {
+  const fetchUserProfile = async (showLoader = true) => {
     try {
-      setLoading(true);
+      if (showLoader) {
+        setLoading(true);
+      }
       
       if (!currentUserId) {
         setError('User not logged in');
         setLoading(false);
+        setRefreshing(false);
         return;
       }
       
@@ -473,6 +477,7 @@ export default function ProfileScreen() {
       } else {
         setError('User not found');
         setLoading(false);
+        setRefreshing(false);
         return;
       }
       
@@ -523,21 +528,23 @@ export default function ProfileScreen() {
       setError('Error loading profile');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
-  // Fetch on mount
+  // Refresh handler for pull-to-refresh
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    fetchUserProfile(false);
+  }, [currentUserId]);
+
+  // Fetch on mount only, not on focus
   useEffect(() => {
     fetchUserProfile();
   }, [currentUserId]);
   
-  // Refetch when the tab gains focus
-  useFocusEffect(
-    React.useCallback(() => {
-      fetchUserProfile();
-    }, [currentUserId])
-  );
-
+  // Remove useFocusEffect - we don't want to fetch on every focus now
+  
   const handleEditProfile = () => {
     router.push('/profile/edit');
   };
@@ -701,6 +708,14 @@ export default function ProfileScreen() {
           }}
           keyExtractor={(item) => item.id}
           numColumns={NUM_COLUMNS}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[theme.primary]}
+              tintColor={theme.primary}
+            />
+          }
           ListHeaderComponent={() => (
             <>
               {/* Profile section */}
@@ -909,10 +924,14 @@ export default function ProfileScreen() {
             <EventCard event={item} />
           )}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={{ 
-            paddingBottom: insets.bottom + 20,
-            paddingHorizontal: 16
-          }}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[theme.primary]}
+              tintColor={theme.primary}
+            />
+          }
           ListHeaderComponent={() => (
             <>
               {/* Profile section */}
@@ -1104,6 +1123,10 @@ export default function ProfileScreen() {
               </Text>
             </View>
           }
+          contentContainerStyle={{ 
+            paddingBottom: insets.bottom + 20,
+            paddingHorizontal: 16
+          }}
         />
       )}
     </View>

@@ -866,23 +866,6 @@ export default function EventScreen() {
             <Text style={[styles.description, { color: theme.text }]}>{event.description}</Text>
           </View>
 
-          {/* Event Photos */}
-          <View style={[styles.section, { backgroundColor: theme.card }]}>
-            <Text style={[styles.sectionTitle, { color: theme.text }]}>Photos</Text>
-            <EventPhotos 
-              eventId={event.id} 
-              isParticipant={(userParticipant !== undefined && userParticipant !== null) || isEventCreator === true} 
-            />
-          </View>
-
-          {/* Comments Section */}
-          <View style={[styles.section, { backgroundColor: theme.card }]}>
-            <EventComments 
-              eventId={event.id}
-              isParticipant={(userParticipant !== undefined && userParticipant !== null) || isEventCreator === true}
-            />
-          </View>
-
           {/* Invited Participants section - only visible to event creator */}
           {isEventCreator && invitedParticipants.length > 0 && (
             <View style={styles.participantsSection}>
@@ -1037,6 +1020,23 @@ export default function EventScreen() {
                 description={event.location.address}
               />
             </MapView>
+          </View>
+
+          {/* Event Photos */}
+          <View style={[styles.section, { backgroundColor: theme.card }]}>
+            <Text style={[styles.sectionTitle, { color: theme.text }]}>Photos</Text>
+            <EventPhotos 
+              eventId={event.id} 
+              isParticipant={(userParticipant !== undefined && userParticipant !== null) || isEventCreator === true} 
+            />
+          </View>
+
+          {/* Comments Section */}
+          <View style={[styles.section, { backgroundColor: theme.card }]}>
+            <EventComments 
+              eventId={event.id}
+              isParticipant={(userParticipant !== undefined && userParticipant !== null) || isEventCreator === true}
+            />
           </View>
           
           {/* Upload date */}
@@ -1382,16 +1382,15 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   titleContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: 'column',
+    justifyContent: 'flex-start',
+    alignItems: 'flex-start',
     marginBottom: 16,
   },
   title: {
     fontSize: 24,
     fontWeight: 'bold',
-    marginBottom: 0,
-    flex: 1,
+    marginBottom: 8,
     fontFamily: 'Roboto',
   },
   creatorContainer: {
@@ -1764,10 +1763,10 @@ const styles = StyleSheet.create({
   eventRatingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    padding: 6,
+    borderRadius: 8,
     backgroundColor: 'rgba(0,0,0,0.05)',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 20,
+    alignSelf: 'flex-start',
   },
   ratingNumber: {
     fontSize: 16,
