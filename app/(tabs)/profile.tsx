@@ -651,12 +651,12 @@ export default function ProfileScreen() {
           >
             <Ionicons name="search-outline" size={24} color={theme.text} />
           </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.iconButton}
-            onPress={() => router.push('/settings')}
-          >
-            <Ionicons name="settings-outline" size={24} color={theme.text} />
-          </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.iconButton}
+          onPress={() => router.push('/settings')}
+        >
+          <Ionicons name="settings-outline" size={24} color={theme.text} />
+        </TouchableOpacity>
         </View>
       </View>
       

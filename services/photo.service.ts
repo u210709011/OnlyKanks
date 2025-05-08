@@ -23,21 +23,28 @@ export class PhotoService {
       // Upload to Cloudinary
       const photoURL = await CloudinaryService.uploadImage(uri);
 
-      // Create photo document in Firestore
-      const photoDoc = await addDoc(collection(db, collections.EVENT_PHOTOS), {
+      // Create document data, only include caption if it has content
+      const photoData: any = {
         eventId,
         userId,
         photoURL,
-        caption,
         createdAt: new Date(),
-      });
+      };
+      
+      // Only add caption field if it exists and has content
+      if (caption && caption.trim().length > 0) {
+        photoData.caption = caption;
+      }
+
+      // Create photo document in Firestore
+      const photoDoc = await addDoc(collection(db, collections.EVENT_PHOTOS), photoData);
 
       return {
         id: photoDoc.id,
         eventId,
         userId,
         photoURL,
-        caption,
+        caption: caption && caption.trim().length > 0 ? caption : undefined,
         createdAt: new Date(),
       };
     } catch (error) {

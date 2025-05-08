@@ -61,10 +61,10 @@ export const signIn = async (email: string, password: string) => {
       });
     } else {
       // User exists, just update online status
-      await setDoc(userRef, {
-        isOnline: true,
-        updatedAt: serverTimestamp()
-      }, { merge: true });
+    await setDoc(userRef, {
+      isOnline: true,
+      updatedAt: serverTimestamp()
+    }, { merge: true });
     }
     
     return user;

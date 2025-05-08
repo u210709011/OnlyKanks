@@ -52,7 +52,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       try {
-        if (firebaseUser) {
+      if (firebaseUser) {
           // Check if the user document exists in Firestore
           const userDoc = await getDoc(doc(db, collections.USERS, firebaseUser.uid));
           
@@ -63,16 +63,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setUser(null);
           } else {
             // User exists, set online status
-            await UserService.updateOnlineStatus(true);
-            
-            setUser({
-              id: firebaseUser.uid,
-              email: firebaseUser.email!,
-              displayName: firebaseUser.displayName || undefined,
-              photoURL: firebaseUser.photoURL || undefined,
-            });
+        await UserService.updateOnlineStatus(true);
+        
+        setUser({
+          id: firebaseUser.uid,
+          email: firebaseUser.email!,
+          displayName: firebaseUser.displayName || undefined,
+          photoURL: firebaseUser.photoURL || undefined,
+        });
           }
-        } else {
+      } else {
           setUser(null);
         }
       } catch (error) {

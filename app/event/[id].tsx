@@ -825,7 +825,10 @@ export default function EventScreen() {
           {/* Event Photos */}
           <View style={[styles.section, { backgroundColor: theme.card }]}>
             <Text style={[styles.sectionTitle, { color: theme.text }]}>Photos</Text>
-            <EventPhotos eventId={event.id} />
+            <EventPhotos 
+              eventId={event.id} 
+              isParticipant={(userParticipant !== undefined && userParticipant !== null) || isEventCreator === true} 
+            />
           </View>
 
           {/* Invited Participants section - only visible to event creator */}

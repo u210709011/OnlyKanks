@@ -10,6 +10,10 @@ import {
   TextInput,
   Alert,
   Dimensions,
+  Modal,
+  Linking,
+  Share,
+  StatusBar,
 } from 'react-native';
 import { useTheme } from '../context/theme.context';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,16 +23,24 @@ import { auth } from '../config/firebase';
 
 interface EventPhotosProps {
   eventId: string;
+  isParticipant?: boolean; // New prop to determine if user is a participant
 }
 
-export default function EventPhotos({ eventId }: EventPhotosProps) {
+export default function EventPhotos({ eventId, isParticipant = false }: EventPhotosProps) {
   const { theme } = useTheme();
   const [photos, setPhotos] = useState<EventPhoto[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [caption, setCaption] = useState('');
   const screenWidth = Dimensions.get('window').width;
-  const itemWidth = (screenWidth - 32) / 2 - 8; // 2 columns with 16px padding on each side and 8px between items
+  const screenHeight = Dimensions.get('window').height;
+  const columnWidth = (screenWidth - 48) / 2; // 2 photos per column (width for column container)
+  const photoWidth = columnWidth - 16; // Account for padding
+  
+  // State for photo viewing modal
+  const [selectedPhoto, setSelectedPhoto] = useState<EventPhoto | null>(null);
+  const [showPhotoModal, setShowPhotoModal] = useState(false);
+  const [sharing, setSharing] = useState(false);
 
   useEffect(() => {
     loadPhotos();
@@ -73,11 +85,12 @@ export default function EventPhotos({ eventId }: EventPhotosProps) {
 
     try {
       setUploading(true);
+      const captionText = caption.trim();
       const photo = await PhotoService.uploadEventPhoto(
         eventId,
         auth.currentUser.uid,
         uri,
-        caption.trim() || undefined
+        captionText.length > 0 ? captionText : undefined
       );
       setPhotos(prev => [photo, ...prev]);
       setCaption('');
@@ -103,6 +116,51 @@ export default function EventPhotos({ eventId }: EventPhotosProps) {
       Alert.alert('Error', 'Failed to delete photo');
     }
   };
+  
+  const sharePhoto = async (photo: EventPhoto) => {
+    try {
+      setSharing(true);
+      
+      // Try to share via the Share API
+      await Share.share({
+        url: photo.photoURL,
+        message: photo.caption || 'Check out this event photo!',
+      });
+    } catch (error) {
+      console.error('Error sharing photo:', error);
+      
+      // If sharing fails, try to open in browser as fallback
+      try {
+        await Linking.openURL(photo.photoURL);
+      } catch (linkError) {
+        Alert.alert('Error', 'Could not share or open the photo');
+      }
+    } finally {
+      setSharing(false);
+    }
+  };
+
+  const renderPhotoItem = (photo: EventPhoto, index: number) => (
+    <View key={`photo-${index}`} style={[styles.photoContainer, { width: photoWidth }]}>
+      <TouchableOpacity 
+        activeOpacity={0.9}
+        onPress={() => {
+          setSelectedPhoto(photo);
+          setShowPhotoModal(true);
+        }}
+      >
+        <Image source={{ uri: photo.photoURL }} style={styles.photo} />
+      </TouchableOpacity>
+      
+      <View style={styles.captionContainer}>
+        {photo.caption && (
+          <Text style={[styles.caption, { color: theme.text }]} numberOfLines={1} ellipsizeMode="tail">
+            {photo.caption}
+          </Text>
+        )}
+      </View>
+    </View>
+  );
 
   if (loading) {
     return (
@@ -112,102 +170,125 @@ export default function EventPhotos({ eventId }: EventPhotosProps) {
     );
   }
 
-  // Create rows of photos for grid display
-  const createPhotoRows = () => {
-    const rows = [];
+  // Create columns of photos for the layout
+  const createPhotoColumns = () => {
+    const columns = [];
+    
+    // Process photos in pairs to create columns
     for (let i = 0; i < photos.length; i += 2) {
-      const rowItems = [];
-      // First item in row
-      rowItems.push(
-        <View key={photos[i].id} style={[styles.photoContainer, { width: itemWidth }]}>
-          <Image source={{ uri: photos[i].photoURL }} style={styles.photo} />
-          {photos[i].caption && (
-            <Text style={[styles.caption, { color: theme.text }]} numberOfLines={2}>
-              {photos[i].caption}
-            </Text>
-          )}
-          {auth.currentUser?.uid === photos[i].userId && (
-            <TouchableOpacity
-              style={[styles.deleteButton, { backgroundColor: theme.error }]}
-              onPress={() => deletePhoto(photos[i])}
-            >
-              <Ionicons name="trash" size={20} color="white" />
-            </TouchableOpacity>
-          )}
-        </View>
-      );
+      const column = [];
       
-      // Second item in row (if exists)
+      // Add the first photo (top of column)
+      column.push(renderPhotoItem(photos[i], i));
+      
+      // Add the second photo (bottom of column) if exists
       if (i + 1 < photos.length) {
-        rowItems.push(
-          <View key={photos[i + 1].id} style={[styles.photoContainer, { width: itemWidth }]}>
-            <Image source={{ uri: photos[i + 1].photoURL }} style={styles.photo} />
-            {photos[i + 1].caption && (
-              <Text style={[styles.caption, { color: theme.text }]} numberOfLines={2}>
-                {photos[i + 1].caption}
-              </Text>
-            )}
-            {auth.currentUser?.uid === photos[i + 1].userId && (
-              <TouchableOpacity
-                style={[styles.deleteButton, { backgroundColor: theme.error }]}
-                onPress={() => deletePhoto(photos[i + 1])}
-              >
-                <Ionicons name="trash" size={20} color="white" />
-              </TouchableOpacity>
-            )}
-          </View>
-        );
+        column.push(renderPhotoItem(photos[i+1], i+1));
       }
       
-      rows.push(
-        <View key={`row-${i}`} style={styles.photoRow}>
-          {rowItems}
+      // Add column to the layout
+      columns.push(
+        <View key={`column-${i}`} style={styles.photoColumn}>
+          {column}
         </View>
       );
     }
-    return rows;
+    
+    return columns;
   };
 
   return (
     <View style={styles.container}>
-      <View style={styles.uploadContainer}>
-        <TextInput
-          style={[styles.captionInput, { 
-            backgroundColor: theme.card,
-            color: theme.text,
-            borderColor: theme.border,
-          }]}
-          placeholder="Add a caption (optional)"
-          placeholderTextColor={theme.text + '80'}
-          value={caption}
-          onChangeText={setCaption}
-          maxLength={100}
-        />
-        <TouchableOpacity
-          style={[styles.uploadButton, { backgroundColor: theme.primary }]}
-          onPress={pickImage}
-          disabled={uploading}
-        >
-          {uploading ? (
-            <ActivityIndicator color="white" />
-          ) : (
-            <Ionicons name="camera" size={24} color="white" />
-          )}
-        </TouchableOpacity>
-      </View>
+      {/* Only show upload controls if user is a participant */}
+      {isParticipant && (
+        <View style={styles.uploadContainer}>
+          <TextInput
+            style={[styles.captionInput, { 
+              backgroundColor: theme.card,
+              color: theme.text,
+              borderColor: theme.border,
+            }]}
+            placeholder="Add a caption (optional)"
+            placeholderTextColor={theme.text + '80'}
+            value={caption}
+            onChangeText={setCaption}
+            maxLength={100}
+          />
+          <TouchableOpacity
+            style={[styles.uploadButton, { backgroundColor: theme.primary }]}
+            onPress={pickImage}
+            disabled={uploading}
+          >
+            {uploading ? (
+              <ActivityIndicator color="white" />
+            ) : (
+              <Ionicons name="camera" size={24} color="white" />
+            )}
+          </TouchableOpacity>
+        </View>
+      )}
 
-      <ScrollView contentContainerStyle={styles.photosContainer}>
-        {photos.length > 0 ? (
-          createPhotoRows()
-        ) : (
-          <View style={styles.emptyContainer}>
-            <Ionicons name="images-outline" size={48} color={theme.text + '40'} />
-            <Text style={[styles.emptyText, { color: theme.text + '80' }]}>
-              No photos yet. Be the first to share!
-            </Text>
+      {photos.length > 0 ? (
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.photosContainer}
+        >
+          {createPhotoColumns()}
+        </ScrollView>
+      ) : (
+        <View style={styles.emptyContainer}>
+          <Ionicons name="images-outline" size={48} color={theme.text + '40'} />
+          <Text style={[styles.emptyText, { color: theme.text + '80' }]}>
+            No photos yet. {isParticipant ? 'Be the first to share!' : ''}
+          </Text>
+        </View>
+      )}
+      
+      {/* Minimal Photo Modal */}
+      <Modal
+        visible={showPhotoModal}
+        transparent={true}
+        animationType="fade"
+        statusBarTranslucent={true}
+        onRequestClose={() => setShowPhotoModal(false)}
+      >
+        <StatusBar backgroundColor="rgba(0,0,0,0.9)" barStyle="light-content" />
+        <View style={styles.modalContainer}>
+          {selectedPhoto && (
+            <Image 
+              source={{ uri: selectedPhoto.photoURL }} 
+              style={styles.fullSizePhoto}
+              resizeMode="contain"
+            />
+          )}
+          
+          <View style={styles.modalButtonsContainer}>
+            <TouchableOpacity
+              style={styles.modalButton}
+              onPress={() => {
+                if (selectedPhoto) {
+                  sharePhoto(selectedPhoto);
+                }
+              }}
+              disabled={sharing}
+            >
+              {sharing ? (
+                <ActivityIndicator color="white" size="small" />
+              ) : (
+                <Ionicons name="share-outline" size={24} color="white" />
+              )}
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={styles.modalButton}
+              onPress={() => setShowPhotoModal(false)}
+            >
+              <Ionicons name="close" size={24} color="white" />
+            </TouchableOpacity>
           </View>
-        )}
-      </ScrollView>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -220,6 +301,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    height: 200,
   },
   uploadContainer: {
     flexDirection: 'row',
@@ -243,12 +325,14 @@ const styles = StyleSheet.create({
   },
   photosContainer: {
     padding: 8,
-    paddingBottom: 20,
-  },
-  photoRow: {
+    paddingRight: 16,
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 16,
+  },
+  photoColumn: {
+    flexDirection: 'column',
+    marginLeft: 8,
+    gap: 8,
+    marginBottom: 8,
   },
   photoContainer: {
     borderRadius: 12,
@@ -257,32 +341,54 @@ const styles = StyleSheet.create({
   photo: {
     width: '100%',
     aspectRatio: 1,
+    borderRadius: 12,
+  },
+  captionContainer: {
+    height: 36, // Fixed height for caption area
+    padding: 8,
+    justifyContent: 'center',
   },
   caption: {
-    padding: 8,
     fontSize: 12,
     fontFamily: 'Roboto',
   },
-  deleteButton: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   emptyContainer: {
-    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     padding: 32,
+    height: 200,
   },
   emptyText: {
     marginTop: 16,
     fontSize: 16,
     textAlign: 'center',
     fontFamily: 'Roboto',
+  },
+  // Modal styles
+  modalContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fullSizePhoto: {
+    width: '100%',
+    height: '100%',
+  },
+  modalButtonsContainer: {
+    position: 'absolute',
+    top: 40,
+    right: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  modalButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 10,
   },
 }); 

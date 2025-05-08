@@ -48,13 +48,13 @@ export const CustomButton: React.FC<CustomButtonProps> = ({
               style={styles.icon} 
             />
           )}
-          <Text style={[
-            styles.text,
-            { color: secondary ? theme.text : 'white', fontFamily: 'Roboto' },
-            textStyle,
-          ]}>
-            {title}
-          </Text>
+        <Text style={[
+          styles.text,
+          { color: secondary ? theme.text : 'white', fontFamily: 'Roboto' },
+          textStyle,
+        ]}>
+          {title}
+        </Text>
         </View>
       )}
     </TouchableOpacity>
