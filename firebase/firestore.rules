@@ -15,6 +15,30 @@ service cloud.firestore {
       );
     }
 
+    match /eventComments/{commentId} {
+      // Allow reading comments by any authenticated user
+      allow read: if request.auth != null;
+      
+      // Allow creating comments if user is authenticated and is a participant in the event
+      allow create: if request.auth != null && 
+        request.resource.data.userId == request.auth.uid &&
+        exists(/databases/$(database)/documents/events/$(request.resource.data.eventId)) &&
+        (
+          // Creator is always allowed to comment
+          get(/databases/$(database)/documents/events/$(request.resource.data.eventId)).data.createdBy == request.auth.uid ||
+          // Check if user is a participant in the event
+          exists(/databases/$(database)/documents/events/$(request.resource.data.eventId)) &&
+          get(/databases/$(database)/documents/events/$(request.resource.data.eventId)).data.participants.hasAny([
+            {"id": request.auth.uid, "type": "USER", "status": "ACCEPTED"},
+            {"id": request.auth.uid, "type": "USER"}
+          ])
+        );
+      
+      // Allow users to delete their own comments
+      allow delete: if request.auth != null && 
+        resource.data.userId == request.auth.uid;
+    }
+
     match /messages/{messageId} {
       allow read: if request.auth != null && 
         (resource.data.senderId == request.auth.uid || 

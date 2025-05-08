@@ -27,6 +27,7 @@ import { CustomButton } from '../../components/shared/CustomButton';
 import { FriendsService } from '../../services/friends.service';
 import { EventsService } from '../../services/events.service';
 import EventPhotos from '../../components/EventPhotos';
+import EventComments from '../../components/EventComments';
 
 // Define a type for creator data
 interface CreatorData {
@@ -828,6 +829,14 @@ export default function EventScreen() {
             <EventPhotos 
               eventId={event.id} 
               isParticipant={(userParticipant !== undefined && userParticipant !== null) || isEventCreator === true} 
+            />
+          </View>
+
+          {/* Comments Section */}
+          <View style={[styles.section, { backgroundColor: theme.card }]}>
+            <EventComments 
+              eventId={event.id}
+              isParticipant={(userParticipant !== undefined && userParticipant !== null) || isEventCreator === true}
             />
           </View>
 
