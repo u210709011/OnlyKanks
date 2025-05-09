@@ -20,7 +20,7 @@ const NUM_COLUMNS = 3;
 const GRID_GAP = 8; // Horizontal and vertical gap between grid items
 const ITEM_WIDTH = (width - (NUM_COLUMNS - 1) * GRID_GAP - 32) / NUM_COLUMNS;
 
-type ViewMode = 'grid' | 'list';
+type ViewMode = string;
 
 export default function UserProfileScreen() {
   const { theme } = useTheme();
@@ -310,12 +310,6 @@ export default function UserProfileScreen() {
                     <Ionicons name="calendar-outline" size={24} color={theme.primary} />
                   </View>
                 )}
-                
-                {item.createdBy === userId && (
-                  <View style={[styles.creatorBadge, { backgroundColor: theme.primary }]}>
-                    <Ionicons name="star" size={14} color="#fff" />
-                  </View>
-                )}
               </TouchableOpacity>
             );
           }}
@@ -476,28 +470,28 @@ export default function UserProfileScreen() {
                   <TouchableOpacity
                     style={[
                       styles.toggleButton,
-                      viewMode === 'grid' && { backgroundColor: theme.primary }
+                      viewMode.includes('grid') ? { backgroundColor: theme.primary } : undefined
                     ]}
                     onPress={() => setViewMode('grid')}
                   >
                     <Ionicons 
                       name="grid" 
                       size={18} 
-                      color={viewMode === 'grid' ? 'white' : theme.text}
+                      color={viewMode.includes('grid') ? 'white' : theme.text}
                     />
                   </TouchableOpacity>
                   
                   <TouchableOpacity
                     style={[
                       styles.toggleButton,
-                      viewMode === 'list' && { backgroundColor: theme.primary }
+                      viewMode.includes('list') ? { backgroundColor: theme.primary } : undefined
                     ]}
                     onPress={() => setViewMode('list')}
                   >
                     <Ionicons 
                       name="list" 
                       size={18} 
-                      color={viewMode === 'list' ? 'white' : theme.text}
+                      color={viewMode.includes('list') ? 'white' : theme.text}
                     />
                   </TouchableOpacity>
                 </View>
@@ -706,28 +700,28 @@ export default function UserProfileScreen() {
                   <TouchableOpacity
                     style={[
                       styles.toggleButton,
-                      viewMode === 'grid' && { backgroundColor: theme.primary }
+                      viewMode.includes('grid') ? { backgroundColor: theme.primary } : undefined
                     ]}
                     onPress={() => setViewMode('grid')}
                   >
                     <Ionicons 
                       name="grid" 
                       size={18} 
-                      color={viewMode === 'grid' ? 'white' : theme.text}
+                      color={viewMode.includes('grid') ? 'white' : theme.text}
                     />
                   </TouchableOpacity>
                   
                   <TouchableOpacity
                     style={[
                       styles.toggleButton,
-                      viewMode === 'list' && { backgroundColor: theme.primary }
+                      viewMode.includes('list') ? { backgroundColor: theme.primary } : undefined
                     ]}
                     onPress={() => setViewMode('list')}
                   >
                     <Ionicons 
                       name="list" 
                       size={18} 
-                      color={viewMode === 'list' ? 'white' : theme.text}
+                      color={viewMode.includes('list') ? 'white' : theme.text}
                     />
                   </TouchableOpacity>
                 </View>
@@ -904,7 +898,8 @@ const styles = StyleSheet.create({
     fontFamily: 'Roboto',
   },
   ratingContainer: {
-    marginVertical: 6,
+    marginBottom: 8,
+    zIndex: 1,
   },
   noImageContainer: {
     width: '100%',
@@ -912,20 +907,5 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  creatorBadge: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 2,
-    elevation: 3,
-  },
-}); 
+  }
+});

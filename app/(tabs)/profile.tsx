@@ -20,7 +20,7 @@ const NUM_COLUMNS = 3;
 const GRID_GAP = 8;
 const ITEM_WIDTH = (width - (NUM_COLUMNS - 1) * GRID_GAP - 32) / NUM_COLUMNS;
 
-type ViewMode = 'grid' | 'list';
+type ViewMode = string;
 
 const styles = StyleSheet.create({
   container: {
@@ -422,21 +422,6 @@ const styles = StyleSheet.create({
   ratingContainer: {
     marginBottom: 8,
   },
-  creatorBadge: {
-    position: 'absolute',
-    top: 8,
-    left: 8,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 2,
-    elevation: 3,
-  },
 });
 
 export default function ProfileScreen() {
@@ -735,11 +720,6 @@ export default function ProfileScreen() {
                     <Ionicons name="calendar-outline" size={24} color={theme.primary} />
                   </View>
                 )}
-                {item.createdBy === currentUserId && (
-                  <View style={[styles.creatorBadge, { backgroundColor: theme.primary }]}>
-                    <Ionicons name="star" size={14} color="#fff" />
-                  </View>
-                )}
               </TouchableOpacity>
             );
           }}
@@ -935,28 +915,28 @@ export default function ProfileScreen() {
                   <TouchableOpacity
                     style={[
                       styles.toggleButton,
-                      viewMode === 'grid' && { backgroundColor: theme.primary }
+                      String(viewMode) === 'grid' ? { backgroundColor: theme.primary } : null
                     ]}
                     onPress={() => setViewMode('grid')}
                   >
                     <Ionicons 
                       name="grid" 
                       size={18} 
-                      color={viewMode === 'grid' ? 'white' : theme.text}
+                      color={String(viewMode) === 'grid' ? 'white' : theme.text}
                     />
                   </TouchableOpacity>
                   
                   <TouchableOpacity
                     style={[
                       styles.toggleButton,
-                      viewMode === 'list' && { backgroundColor: theme.primary }
+                      String(viewMode) === 'list' ? { backgroundColor: theme.primary } : null
                     ]}
                     onPress={() => setViewMode('list')}
                   >
                     <Ionicons 
                       name="list" 
                       size={18} 
-                      color={viewMode === 'list' ? 'white' : theme.text}
+                      color={String(viewMode) === 'list' ? 'white' : theme.text}
                     />
                   </TouchableOpacity>
                 </View>
@@ -1192,28 +1172,28 @@ export default function ProfileScreen() {
                   <TouchableOpacity
                     style={[
                       styles.toggleButton,
-                      viewMode === 'grid' && { backgroundColor: theme.primary }
+                      String(viewMode) === 'grid' ? { backgroundColor: theme.primary } : null
                     ]}
                     onPress={() => setViewMode('grid')}
                   >
                     <Ionicons 
                       name="grid" 
                       size={18} 
-                      color={viewMode === 'grid' ? 'white' : theme.text}
+                      color={String(viewMode) === 'grid' ? 'white' : theme.text}
                     />
                   </TouchableOpacity>
                   
                   <TouchableOpacity
                     style={[
                       styles.toggleButton,
-                      viewMode === 'list' && { backgroundColor: theme.primary }
+                      String(viewMode) === 'list' ? { backgroundColor: theme.primary } : null
                     ]}
                     onPress={() => setViewMode('list')}
                   >
                     <Ionicons 
                       name="list" 
                       size={18} 
-                      color={viewMode === 'list' ? 'white' : theme.text}
+                      color={String(viewMode) === 'list' ? 'white' : theme.text}
                     />
                   </TouchableOpacity>
                 </View>
