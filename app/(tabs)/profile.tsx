@@ -422,6 +422,21 @@ const styles = StyleSheet.create({
   ratingContainer: {
     marginBottom: 8,
   },
+  creatorBadge: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 2,
+    elevation: 3,
+  },
 });
 
 export default function ProfileScreen() {
@@ -442,6 +457,8 @@ export default function ProfileScreen() {
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [invitedEvents, setInvitedEvents] = useState<Event[]>([]);
   const [isInvitationsExpanded, setIsInvitationsExpanded] = useState(false);
+  const [attendingEvents, setAttendingEvents] = useState<Event[]>([]);
+  const [activeTab, setActiveTab] = useState<'created' | 'joined'>('created');
   
   // Determine if this is for the current user
   const currentUserId = auth.currentUser?.uid;
@@ -458,7 +475,7 @@ export default function ProfileScreen() {
   const fetchUserProfile = async (showLoader = true) => {
     try {
       if (showLoader) {
-        setLoading(true);
+      setLoading(true);
       }
       
       if (!currentUserId) {
@@ -523,6 +540,14 @@ export default function ProfileScreen() {
       } catch (error) {
         console.error('Error fetching attending events count:', error);
       }
+      
+      // Fetch events user is attending
+      try {
+        const attending = await EventsService.getEventsAttending(currentUserId);
+        setAttendingEvents(attending);
+      } catch (error) {
+        console.error('Error fetching attending events:', error);
+      }
     } catch (error) {
       console.error('Error fetching user profile:', error);
       setError('Error loading profile');
@@ -544,7 +569,7 @@ export default function ProfileScreen() {
   }, [currentUserId]);
   
   // Remove useFocusEffect - we don't want to fetch on every focus now
-  
+
   const handleEditProfile = () => {
     router.push('/profile/edit');
   };
@@ -673,12 +698,19 @@ export default function ProfileScreen() {
       
       {viewMode === 'grid' ? (
         <FlatList
-          key={`grid-${viewMode}`}
-          data={[...userEvents].sort((a, b) => {
-            const dateA = a.date.toDate ? a.date.toDate() : new Date(a.date);
-            const dateB = b.date.toDate ? b.date.toDate() : new Date(b.date);
-            return dateB.getTime() - dateA.getTime(); // Newest first
-          })}
+          key={`grid-${viewMode}-${activeTab}`}
+          data={activeTab === 'created' 
+            ? [...userEvents].sort((a, b) => {
+                const dateA = a.date.toDate ? a.date.toDate() : new Date(a.date);
+                const dateB = b.date.toDate ? b.date.toDate() : new Date(b.date);
+                return dateB.getTime() - dateA.getTime(); // Newest first
+              })
+            : [...attendingEvents].sort((a, b) => {
+                const dateA = a.date.toDate ? a.date.toDate() : new Date(a.date);
+                const dateB = b.date.toDate ? b.date.toDate() : new Date(b.date);
+                return dateB.getTime() - dateA.getTime(); // Newest first
+              })
+          }
           renderItem={({ item, index }) => {
             // Calculate the column position
             const column = index % NUM_COLUMNS;
@@ -701,6 +733,11 @@ export default function ProfileScreen() {
                 ) : (
                   <View style={[styles.gridItemPlaceholder, { backgroundColor: theme.card }]}>
                     <Ionicons name="calendar-outline" size={24} color={theme.primary} />
+                  </View>
+                )}
+                {item.createdBy === currentUserId && (
+                  <View style={[styles.creatorBadge, { backgroundColor: theme.primary }]}>
+                    <Ionicons name="star" size={14} color="#fff" />
                   </View>
                 )}
               </TouchableOpacity>
@@ -860,36 +897,66 @@ export default function ProfileScreen() {
               
               {/* Tabs for Events */}
               <View style={[styles.tabsContainer, { borderBottomColor: theme.border }]}>
-                <TouchableOpacity style={[styles.tabButton, styles.activeTab]}>
-                  <Ionicons name="calendar" size={24} color={theme.primary} />
+                <TouchableOpacity 
+                  style={[
+                    styles.tabButton, 
+                    { borderBottomColor: activeTab === 'created' ? theme.primary : 'transparent',
+                      borderBottomWidth: activeTab === 'created' ? 2 : 0 }
+                  ]}
+                  onPress={() => setActiveTab('created')}
+                >
+                  <Text style={{ 
+                    color: activeTab === 'created' ? theme.primary : theme.text + '80',
+                    fontWeight: activeTab === 'created' ? 'bold' : 'normal',
+                    fontSize: 14
+                  }}>
+                    Created
+                  </Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={[
+                    styles.tabButton, 
+                    { borderBottomColor: activeTab === 'joined' ? theme.primary : 'transparent',
+                      borderBottomWidth: activeTab === 'joined' ? 2 : 0 }
+                  ]}
+                  onPress={() => setActiveTab('joined')}
+                >
+                  <Text style={{ 
+                    color: activeTab === 'joined' ? theme.primary : theme.text + '80',
+                    fontWeight: activeTab === 'joined' ? 'bold' : 'normal',
+                    fontSize: 14
+                  }}>
+                    Joined
+                  </Text>
                 </TouchableOpacity>
                 
                 <View style={[styles.viewToggle, { backgroundColor: theme.card }]}>
                   <TouchableOpacity
                     style={[
                       styles.toggleButton,
-                      viewMode === ('grid' as ViewMode) && { backgroundColor: theme.primary }
+                      viewMode === 'grid' && { backgroundColor: theme.primary }
                     ]}
                     onPress={() => setViewMode('grid')}
                   >
                     <Ionicons 
                       name="grid" 
                       size={18} 
-                      color={viewMode === ('grid' as ViewMode) ? 'white' : theme.text}
+                      color={viewMode === 'grid' ? 'white' : theme.text}
                     />
                   </TouchableOpacity>
                   
                   <TouchableOpacity
                     style={[
                       styles.toggleButton,
-                      viewMode === ('list' as ViewMode) && { backgroundColor: theme.primary }
+                      viewMode === 'list' && { backgroundColor: theme.primary }
                     ]}
                     onPress={() => setViewMode('list')}
                   >
                     <Ionicons 
                       name="list" 
                       size={18} 
-                      color={viewMode === ('list' as ViewMode) ? 'white' : theme.text}
+                      color={viewMode === 'list' ? 'white' : theme.text}
                     />
                   </TouchableOpacity>
                 </View>
@@ -901,9 +968,13 @@ export default function ProfileScreen() {
               <View style={[styles.emptyIconContainer, { backgroundColor: theme.card }]}>
                 <Ionicons name="calendar-outline" size={32} color={theme.primary} />
               </View>
-              <Text style={[styles.emptyEventsText, { color: theme.text }]}>No events yet</Text>
+              <Text style={[styles.emptyEventsText, { color: theme.text }]}>
+                {activeTab === 'created' ? 'No created events' : 'No joined events'}
+              </Text>
               <Text style={[styles.emptyEventsSubtext, { color: theme.text + '80' }]}>
-                Create your first event by tapping the "+" button on the home tab
+                {activeTab === 'created'
+                  ? "Create your first event by tapping the '+' button on the home tab"
+                  : "You haven't joined any events yet"}
               </Text>
             </View>
           }
@@ -914,12 +985,19 @@ export default function ProfileScreen() {
         />
       ) : (
         <FlatList
-          key={`list-${viewMode}`}
-          data={[...userEvents].sort((a, b) => {
-            const dateA = a.date.toDate ? a.date.toDate() : new Date(a.date);
-            const dateB = b.date.toDate ? b.date.toDate() : new Date(b.date);
-            return dateB.getTime() - dateA.getTime(); // Newest first
-          })}
+          key={`list-${viewMode}-${activeTab}`}
+          data={activeTab === 'created' 
+            ? [...userEvents].sort((a, b) => {
+                const dateA = a.date.toDate ? a.date.toDate() : new Date(a.date);
+                const dateB = b.date.toDate ? b.date.toDate() : new Date(b.date);
+                return dateB.getTime() - dateA.getTime(); // Newest first
+              })
+            : [...attendingEvents].sort((a, b) => {
+                const dateA = a.date.toDate ? a.date.toDate() : new Date(a.date);
+                const dateB = b.date.toDate ? b.date.toDate() : new Date(b.date);
+                return dateB.getTime() - dateA.getTime(); // Newest first
+              })
+          }
           renderItem={({ item }) => (
             <EventCard event={item} />
           )}
@@ -1076,36 +1154,66 @@ export default function ProfileScreen() {
               
               {/* Tabs for Events */}
               <View style={[styles.tabsContainer, { borderBottomColor: theme.border }]}>
-                <TouchableOpacity style={[styles.tabButton, styles.activeTab]}>
-                  <Ionicons name="calendar" size={24} color={theme.primary} />
+                <TouchableOpacity 
+                  style={[
+                    styles.tabButton, 
+                    { borderBottomColor: activeTab === 'created' ? theme.primary : 'transparent',
+                      borderBottomWidth: activeTab === 'created' ? 2 : 0 }
+                  ]}
+                  onPress={() => setActiveTab('created')}
+                >
+                  <Text style={{ 
+                    color: activeTab === 'created' ? theme.primary : theme.text + '80',
+                    fontWeight: activeTab === 'created' ? 'bold' : 'normal',
+                    fontSize: 14
+                  }}>
+                    Created
+                  </Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={[
+                    styles.tabButton, 
+                    { borderBottomColor: activeTab === 'joined' ? theme.primary : 'transparent',
+                      borderBottomWidth: activeTab === 'joined' ? 2 : 0 }
+                  ]}
+                  onPress={() => setActiveTab('joined')}
+                >
+                  <Text style={{ 
+                    color: activeTab === 'joined' ? theme.primary : theme.text + '80',
+                    fontWeight: activeTab === 'joined' ? 'bold' : 'normal',
+                    fontSize: 14
+                  }}>
+                    Joined
+                  </Text>
                 </TouchableOpacity>
                 
                 <View style={[styles.viewToggle, { backgroundColor: theme.card }]}>
                   <TouchableOpacity
                     style={[
                       styles.toggleButton,
-                      viewMode === ('grid' as ViewMode) && { backgroundColor: theme.primary }
+                      viewMode === 'grid' && { backgroundColor: theme.primary }
                     ]}
                     onPress={() => setViewMode('grid')}
                   >
                     <Ionicons 
                       name="grid" 
                       size={18} 
-                      color={viewMode === ('grid' as ViewMode) ? 'white' : theme.text}
+                      color={viewMode === 'grid' ? 'white' : theme.text}
                     />
                   </TouchableOpacity>
                   
                   <TouchableOpacity
                     style={[
                       styles.toggleButton,
-                      viewMode === ('list' as ViewMode) && { backgroundColor: theme.primary }
+                      viewMode === 'list' && { backgroundColor: theme.primary }
                     ]}
                     onPress={() => setViewMode('list')}
                   >
                     <Ionicons 
                       name="list" 
                       size={18} 
-                      color={viewMode === ('list' as ViewMode) ? 'white' : theme.text}
+                      color={viewMode === 'list' ? 'white' : theme.text}
                     />
                   </TouchableOpacity>
                 </View>
@@ -1117,9 +1225,13 @@ export default function ProfileScreen() {
               <View style={[styles.emptyIconContainer, { backgroundColor: theme.card }]}>
                 <Ionicons name="calendar-outline" size={32} color={theme.primary} />
               </View>
-              <Text style={[styles.emptyEventsText, { color: theme.text }]}>No events yet</Text>
+              <Text style={[styles.emptyEventsText, { color: theme.text }]}>
+                {activeTab === 'created' ? 'No created events' : 'No joined events'}
+              </Text>
               <Text style={[styles.emptyEventsSubtext, { color: theme.text + '80' }]}>
-                Create your first event by tapping the "+" button on the home tab
+                {activeTab === 'created'
+                  ? "Create your first event by tapping the '+' button on the home tab"
+                  : "You haven't joined any events yet"}
               </Text>
             </View>
           }

@@ -57,6 +57,7 @@ export const EventCard: React.FC<EventCardProps> = ({ event, onPress }) => {
   const [isExpired, setIsExpired] = useState(false);
   const [isInvited, setIsInvited] = useState(false);
   const [eventRating, setEventRating] = useState<number | null>(null);
+  const [isCreator, setIsCreator] = useState(false);
 
   useEffect(() => {
     // Check if event is expired (current time is after event time + duration)
@@ -67,6 +68,11 @@ export const EventCard: React.FC<EventCardProps> = ({ event, onPress }) => {
     
     if (endTime && isPast(endTime)) {
       setIsExpired(true);
+    }
+
+    // Check if current user is the creator
+    if (user && event.createdBy === user.id) {
+      setIsCreator(true);
     }
 
     const fetchCreator = async () => {
@@ -331,6 +337,12 @@ export const EventCard: React.FC<EventCardProps> = ({ event, onPress }) => {
               {eventRating.toFixed(1)}
             </Text>
             <Ionicons name="star" size={12} color={theme.primary} style={{ marginLeft: 2 }} />
+          </View>
+        )}
+        
+        {user && event.createdBy === user.id && (
+          <View style={[styles.creatorBadge, { backgroundColor: theme.primary }]}>
+            <Ionicons name="star" size={14} color="#fff" />
           </View>
         )}
       </View>
@@ -666,10 +678,25 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     position: 'absolute',
     top: 8,
-    left: 8,
+    left: 40,
   },
   ratingText: {
     fontSize: 12,
     fontWeight: 'bold',
+  },
+  creatorBadge: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 2,
+    elevation: 3,
   },
 }); 

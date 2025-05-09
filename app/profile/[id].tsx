@@ -32,6 +32,7 @@ export default function UserProfileScreen() {
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const [userBio, setUserBio] = useState<string>('');
   const [userEvents, setUserEvents] = useState<Event[]>([]);
+  const [attendingEvents, setAttendingEvents] = useState<Event[]>([]);
   const [friendsCount, setFriendsCount] = useState<number>(0);
   const [attendingCount, setAttendingCount] = useState<number>(0);
   const [loading, setLoading] = useState(true);
@@ -42,6 +43,7 @@ export default function UserProfileScreen() {
   const [friendActionLoading, setFriendActionLoading] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
+  const [activeTab, setActiveTab] = useState<'created' | 'joined'>('created');
   
   const userId = id as string;
 
@@ -94,6 +96,14 @@ export default function UserProfileScreen() {
         setUserEvents(eventsData);
       } catch (error) {
         console.error('Error fetching user events:', error);
+      }
+      
+      // Fetch events user is attending
+      try {
+        const attending = await EventsService.getEventsAttending(userId);
+        setAttendingEvents(attending);
+      } catch (error) {
+        console.error('Error fetching attending events:', error);
       }
       
       // Fetch friends count
@@ -264,11 +274,18 @@ export default function UserProfileScreen() {
       {viewMode === 'grid' ? (
         <FlatList
           key="grid"
-          data={[...userEvents].sort((a, b) => {
-            const dateA = a.date.toDate ? a.date.toDate() : new Date(a.date);
-            const dateB = b.date.toDate ? b.date.toDate() : new Date(b.date);
-            return dateB.getTime() - dateA.getTime(); // Newest first
-          })}
+          data={activeTab === 'created' 
+            ? [...userEvents].sort((a, b) => {
+                const dateA = a.date.toDate ? a.date.toDate() : new Date(a.date);
+                const dateB = b.date.toDate ? b.date.toDate() : new Date(b.date);
+                return dateB.getTime() - dateA.getTime(); // Newest first
+              })
+            : [...attendingEvents].sort((a, b) => {
+                const dateA = a.date.toDate ? a.date.toDate() : new Date(a.date);
+                const dateB = b.date.toDate ? b.date.toDate() : new Date(b.date);
+                return dateB.getTime() - dateA.getTime(); // Newest first
+              })
+          }
           renderItem={({ item, index }) => {
             // Calculate the column position
             const column = index % NUM_COLUMNS;
@@ -291,6 +308,12 @@ export default function UserProfileScreen() {
                 ) : (
                   <View style={[styles.noImageContainer, { backgroundColor: theme.card }]}>
                     <Ionicons name="calendar-outline" size={24} color={theme.primary} />
+                  </View>
+                )}
+                
+                {item.createdBy === userId && (
+                  <View style={[styles.creatorBadge, { backgroundColor: theme.primary }]}>
+                    <Ionicons name="star" size={14} color="#fff" />
                   </View>
                 )}
               </TouchableOpacity>
@@ -415,8 +438,38 @@ export default function UserProfileScreen() {
               
               {/* Tabs for Events */}
               <View style={[styles.tabsContainer, { borderBottomColor: theme.border }]}>
-                <TouchableOpacity style={[styles.tabButton, styles.activeTab, { borderBottomColor: theme.primary }]}>
-                  <Ionicons name="calendar" size={24} color={theme.primary} />
+                <TouchableOpacity 
+                  style={[
+                    styles.tabButton, 
+                    { borderBottomColor: activeTab === 'created' ? theme.primary : 'transparent',
+                      borderBottomWidth: activeTab === 'created' ? 2 : 0 }
+                  ]}
+                  onPress={() => setActiveTab('created')}
+                >
+                  <Text style={{ 
+                    color: activeTab === 'created' ? theme.primary : theme.text + '80',
+                    fontWeight: activeTab === 'created' ? 'bold' : 'normal',
+                    fontSize: 14
+                  }}>
+                    Created
+                  </Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={[
+                    styles.tabButton, 
+                    { borderBottomColor: activeTab === 'joined' ? theme.primary : 'transparent',
+                      borderBottomWidth: activeTab === 'joined' ? 2 : 0 }
+                  ]}
+                  onPress={() => setActiveTab('joined')}
+                >
+                  <Text style={{ 
+                    color: activeTab === 'joined' ? theme.primary : theme.text + '80',
+                    fontWeight: activeTab === 'joined' ? 'bold' : 'normal',
+                    fontSize: 14
+                  }}>
+                    Joined
+                  </Text>
                 </TouchableOpacity>
                 
                 <View style={[styles.viewToggle, { backgroundColor: theme.card }]}>
@@ -455,9 +508,13 @@ export default function UserProfileScreen() {
                   <View style={[styles.emptyIconContainer, { backgroundColor: theme.card }]}>
                     <Ionicons name="calendar-outline" size={32} color={theme.primary} />
                   </View>
-                  <Text style={[styles.emptyEventsText, { color: theme.text }]}>No events yet</Text>
+                  <Text style={[styles.emptyEventsText, { color: theme.text }]}>
+                    {activeTab === 'created' ? 'No created events' : 'No joined events'}
+                  </Text>
                   <Text style={[styles.emptyEventsSubtext, { color: theme.text + '80' }]}>
-                    This user hasn't created any events yet
+                    {activeTab === 'created'
+                      ? "This user hasn't created any events yet"
+                      : "This user hasn't joined any events yet"}
                   </Text>
                 </View>
               )}
@@ -474,11 +531,18 @@ export default function UserProfileScreen() {
       ) : (
         <FlatList
           key="list"
-          data={[...userEvents].sort((a, b) => {
-            const dateA = a.date.toDate ? a.date.toDate() : new Date(a.date);
-            const dateB = b.date.toDate ? b.date.toDate() : new Date(b.date);
-            return dateB.getTime() - dateA.getTime(); // Newest first
-          })}
+          data={activeTab === 'created' 
+            ? [...userEvents].sort((a, b) => {
+                const dateA = a.date.toDate ? a.date.toDate() : new Date(a.date);
+                const dateB = b.date.toDate ? b.date.toDate() : new Date(b.date);
+                return dateB.getTime() - dateA.getTime(); // Newest first
+              })
+            : [...attendingEvents].sort((a, b) => {
+                const dateA = a.date.toDate ? a.date.toDate() : new Date(a.date);
+                const dateB = b.date.toDate ? b.date.toDate() : new Date(b.date);
+                return dateB.getTime() - dateA.getTime(); // Newest first
+              })
+          }
           renderItem={({ item }) => (
             <EventCard event={item} />
           )}
@@ -604,8 +668,38 @@ export default function UserProfileScreen() {
               
               {/* Tabs for Events */}
               <View style={[styles.tabsContainer, { borderBottomColor: theme.border }]}>
-                <TouchableOpacity style={[styles.tabButton, styles.activeTab, { borderBottomColor: theme.primary }]}>
-                  <Ionicons name="calendar" size={24} color={theme.primary} />
+                <TouchableOpacity 
+                  style={[
+                    styles.tabButton, 
+                    { borderBottomColor: activeTab === 'created' ? theme.primary : 'transparent',
+                      borderBottomWidth: activeTab === 'created' ? 2 : 0 }
+                  ]}
+                  onPress={() => setActiveTab('created')}
+                >
+                  <Text style={{ 
+                    color: activeTab === 'created' ? theme.primary : theme.text + '80',
+                    fontWeight: activeTab === 'created' ? 'bold' : 'normal',
+                    fontSize: 14
+                  }}>
+                    Created
+                  </Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={[
+                    styles.tabButton, 
+                    { borderBottomColor: activeTab === 'joined' ? theme.primary : 'transparent',
+                      borderBottomWidth: activeTab === 'joined' ? 2 : 0 }
+                  ]}
+                  onPress={() => setActiveTab('joined')}
+                >
+                  <Text style={{ 
+                    color: activeTab === 'joined' ? theme.primary : theme.text + '80',
+                    fontWeight: activeTab === 'joined' ? 'bold' : 'normal',
+                    fontSize: 14
+                  }}>
+                    Joined
+                  </Text>
                 </TouchableOpacity>
                 
                 <View style={[styles.viewToggle, { backgroundColor: theme.card }]}>
@@ -645,9 +739,13 @@ export default function UserProfileScreen() {
               <View style={[styles.emptyIconContainer, { backgroundColor: theme.card }]}>
                 <Ionicons name="calendar-outline" size={32} color={theme.primary} />
               </View>
-              <Text style={[styles.emptyEventsText, { color: theme.text }]}>No events yet</Text>
+              <Text style={[styles.emptyEventsText, { color: theme.text }]}>
+                {activeTab === 'created' ? 'No created events' : 'No joined events'}
+              </Text>
               <Text style={[styles.emptyEventsSubtext, { color: theme.text + '80' }]}>
-                This user hasn't created any events yet
+                {activeTab === 'created'
+                  ? "This user hasn't created any events yet"
+                  : "This user hasn't joined any events yet"}
               </Text>
             </View>
           }
@@ -814,5 +912,20 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  creatorBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 2,
+    elevation: 3,
   },
 }); 
