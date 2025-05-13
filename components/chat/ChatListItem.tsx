@@ -72,8 +72,10 @@ export const ChatListItem: React.FC<ChatListItemProps> = ({ chat, onPress }) => 
         )}
 
         {unreadCount > 0 && (
-          <View style={[styles.badge, { backgroundColor: theme.primary }]}>
-            <Text style={styles.badgeText}>{unreadCount}</Text>
+          <View style={styles.unreadContainer}>
+            <View style={[styles.unreadBadge, { backgroundColor: theme.primary }]}>
+              <Text style={styles.unreadText}>{unreadCount}</Text>
+            </View>
           </View>
         )}
       </View>
@@ -124,15 +126,19 @@ const styles = StyleSheet.create({
     opacity: 0.5,
     marginBottom: 4,
   },
-  badge: {
+  unreadContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  unreadBadge: {
     minWidth: 20,
     height: 20,
     borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 4,
+    paddingHorizontal: 6,
   },
-  badgeText: {
+  unreadText: {
     color: 'white',
     fontSize: 12,
     fontWeight: 'bold',

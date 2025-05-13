@@ -10,6 +10,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { format, startOfDay } from 'date-fns';
 import { Event } from '../../services/events.service';
 import { BlurView } from 'expo-blur';
+import CategoryFilter from '../filters/CategoryFilter';
 
 const { width } = Dimensions.get('window');
 
@@ -44,6 +45,8 @@ export interface FilterOptions {
     endDate: Date | null;
   };
   sortBy: SortOption;
+  categoryId?: string;
+  subCategoryIds?: string[];
 }
 
 interface EventFiltersProps {
@@ -71,7 +74,9 @@ export const EventFilters: React.FC<EventFiltersProps> = ({
       startDate: null,
       endDate: null,
     },
-    sortBy: 'date-asc'
+    sortBy: 'date-asc',
+    categoryId: undefined,
+    subCategoryIds: []
   });
   
   const [userDefaultLocation, setUserDefaultLocation] = useState<{
@@ -723,62 +728,84 @@ export const EventFilters: React.FC<EventFiltersProps> = ({
                   </TouchableOpacity>
                 </View>
                 
-                <View style={styles.datePickerRow}>
-                  <Text style={[styles.dateLabel, { color: theme.text }]}>From:</Text>
-                  <Pressable
-                    style={[styles.dateButton, { backgroundColor: theme.card }]}
-                    onPress={() => setShowStartDatePicker(true)}
-                  >
-                    <Text style={{ color: theme.text }}>
-                      {formatDateString(filters.dateRange.startDate)}
-                    </Text>
-                  </Pressable>
+                <View style={styles.dateRangeContainer}>
+                  <View style={styles.dateInputContainer}>
+                    <Text style={[styles.dateLabel, { color: theme.text + '80' }]}>From</Text>
+                    <Pressable 
+                      style={[styles.dateInput, { backgroundColor: theme.input }]}
+                      onPress={() => setShowStartDatePicker(true)}
+                    >
+                      <Text style={{ color: filters.dateRange.startDate ? theme.text : theme.text + '60' }}>
+                        {formatDateString(filters.dateRange.startDate)}
+                      </Text>
+                    </Pressable>
+                  </View>
+                  
+                  <View style={styles.dateInputContainer}>
+                    <Text style={[styles.dateLabel, { color: theme.text + '80' }]}>To</Text>
+                    <Pressable 
+                      style={[styles.dateInput, { backgroundColor: theme.input }]}
+                      onPress={() => setShowEndDatePicker(true)}
+                    >
+                      <Text style={{ color: filters.dateRange.endDate ? theme.text : theme.text + '60' }}>
+                        {formatDateString(filters.dateRange.endDate)}
+                      </Text>
+                    </Pressable>
+                  </View>
                 </View>
-
-                <View style={styles.datePickerRow}>
-                  <Text style={[styles.dateLabel, { color: theme.text }]}>To:</Text>
-                  <Pressable
-                    style={[styles.dateButton, { backgroundColor: theme.card }]}
-                    onPress={() => setShowEndDatePicker(true)}
+                
+                {(filters.dateRange.startDate || filters.dateRange.endDate) && (
+                  <TouchableOpacity 
+                    style={styles.resetButton}
+                    onPress={resetDateRange}
                   >
-                    <Text style={{ color: theme.text }}>
-                      {formatDateString(filters.dateRange.endDate)}
-                    </Text>
-                  </Pressable>
-                </View>
-
-                {showStartDatePicker && (
-                  <DateTimePicker
-                    value={filters.dateRange.startDate || new Date()}
-                    mode="date"
-                    display="default"
-                    minimumDate={today}
-                    maximumDate={filters.dateRange.endDate || undefined}
-                    onChange={(event, selectedDate) => {
-                      setShowStartDatePicker(false);
-                      if (event.type === 'set' && selectedDate) {
-                        handleDateRangeChange('startDate', selectedDate);
-                      }
-                    }}
-                    themeVariant={isDark ? "dark" : "light"}
-                  />
+                    <Text style={[styles.resetText, { color: theme.primary }]}>Clear Dates</Text>
+                  </TouchableOpacity>
                 )}
+              </View>
 
-                {showEndDatePicker && (
-                  <DateTimePicker
-                    value={filters.dateRange.endDate || new Date()}
-                    mode="date"
-                    display="default"
-                    minimumDate={filters.dateRange.startDate || today}
-                    onChange={(event, selectedDate) => {
-                      setShowEndDatePicker(false);
-                      if (event.type === 'set' && selectedDate) {
-                        handleDateRangeChange('endDate', selectedDate);
-                      }
-                    }}
-                    themeVariant={isDark ? "dark" : "light"}
-                  />
-                )}
+              {/* Category Filter Section */}
+              <View style={styles.filterSection}>
+                <Text style={[styles.filterSectionTitle, { color: theme.text }]}>
+                  Categories
+                </Text>
+                
+                <CategoryFilter
+                  selectedCategory={filters.categoryId}
+                  selectedSubCategories={filters.subCategoryIds || []}
+                  onSelectCategory={(categoryId) => {
+                    console.log("EventFilters: onSelectCategory called with", categoryId);
+                    // Update local state first
+                    handleFilterChange('categoryId', categoryId);
+                    
+                    // Clear subcategories when category changes
+                    handleFilterChange('subCategoryIds', []);
+                    
+                    // Apply the changes immediately to make them take effect
+                    onFilterChange({
+                      ...filters,
+                      categoryId: categoryId,
+                      subCategoryIds: []
+                    });
+                  }}
+                  onSelectSubCategory={(subCategoryId) => {
+                    console.log("EventFilters: onSelectSubCategory called with", subCategoryId);
+                    // Toggle the subcategory selection
+                    const currentSubCategories = filters.subCategoryIds || [];
+                    const updatedSubCategories = currentSubCategories.includes(subCategoryId)
+                      ? currentSubCategories.filter(id => id !== subCategoryId)
+                      : [...currentSubCategories, subCategoryId];
+                    
+                    // Update local state
+                    handleFilterChange('subCategoryIds', updatedSubCategories);
+                    
+                    // Apply changes immediately
+                    onFilterChange({
+                      ...filters,
+                      subCategoryIds: updatedSubCategories
+                    });
+                  }}
+                />
               </View>
             </ScrollView>
 
@@ -786,10 +813,25 @@ export const EventFilters: React.FC<EventFiltersProps> = ({
               <TouchableOpacity 
                 style={[styles.resetAllButton]} 
                 onPress={() => {
+                  console.log("Resetting all filters");
                   resetDistance();
                   resetDateRange();
+                  
+                  // Explicitly set category filters to undefined/empty
+                  const updatedFilters = { 
+                    ...filters, 
+                    locationCoords: null,
+                    categoryId: undefined,
+                    subCategoryIds: [] 
+                  };
+                  
+                  // Update local state first
+                  handleFilterChange('categoryId', undefined);
+                  handleFilterChange('subCategoryIds', []);
                   handleFilterChange('locationCoords', null);
-                  onFilterChange({ ...filters, locationCoords: null });
+                  
+                  // Then notify parent components
+                  onFilterChange(updatedFilters);
                 }}
               >
                 <Text style={[styles.resetAllText, { color: theme.error }]}>Reset All</Text>
@@ -1087,14 +1129,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 12,
   },
+  dateRangeContainer: {
+    width: '100%',
+    marginBottom: 12,
+  },
+  dateInputContainer: {
+    width: '100%',
+    marginBottom: 12,
+  },
   dateLabel: {
-    width: 50,
+    marginBottom: 6,
+    fontSize: 14,
     fontFamily: 'Roboto',
   },
-  dateButton: {
-    flex: 1,
-    padding: 12,
+  dateInput: {
+    width: '100%',
+    height: 44,
     borderRadius: 8,
+    paddingHorizontal: 12,
+    justifyContent: 'center',
   },
   mapContainer: {
     width: '100%',
@@ -1154,5 +1207,10 @@ const styles = StyleSheet.create({
     height: 28,
     paddingVertical: 4,
     paddingHorizontal: 8,
+  },
+  resetText: {
+    fontSize: 14,
+    fontWeight: '500',
+    fontFamily: 'Roboto',
   },
 }); 

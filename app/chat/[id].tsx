@@ -29,6 +29,9 @@ export default function ChatScreen() {
   const [firstUnreadIndex, setFirstUnreadIndex] = useState<number>(-1);
   const [isOnline, setIsOnline] = useState(false);
   const [lastSeen, setLastSeen] = useState<Date | null>(null);
+  const [isAtBottom, setIsAtBottom] = useState(true);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const wasAtBottom = useRef(true);
 
   // Track user presence
   useEffect(() => {
@@ -84,8 +87,43 @@ export default function ChatScreen() {
     const setupChat = async () => {
       try {
         const unsubscribe = await MessagesService.subscribeToMessages(id as string, (newMessages) => {
+          // Store current messages length to check if we got new messages
+          const prevMessagesLength = messages.length;
+          
           setMessages(newMessages);
           setLoading(false);
+          
+          // Count unread messages
+          let count = 0;
+          const unreadIndex = newMessages.findIndex(message => 
+            !message.read && message.senderId !== auth.currentUser?.uid
+          );
+          
+          if (unreadIndex !== -1) {
+            count = newMessages.slice(unreadIndex).filter(
+              msg => !msg.read && msg.senderId !== auth.currentUser?.uid
+            ).length;
+            
+            setFirstUnreadIndex(unreadIndex);
+            setHasUnreadMessages(true);
+            setUnreadCount(count);
+            
+            // If we're not at the bottom, immediately show the indicator
+            if (!isAtBottom) {
+              setShowScrollToUnread(true);
+            }
+          } else {
+            setHasUnreadMessages(false);
+            setShowScrollToUnread(false);
+            setUnreadCount(0);
+          }
+          
+          // Auto-scroll if we were at the bottom and got new messages
+          if (wasAtBottom.current && newMessages.length > prevMessagesLength) {
+            setTimeout(() => {
+              flatListRef.current?.scrollToEnd({ animated: true });
+            }, 100);
+          }
         });
 
         // Mark chat as read when opened
@@ -102,7 +140,7 @@ export default function ChatScreen() {
     };
 
     setupChat();
-  }, [id]);
+  }, [id, isAtBottom]);
 
   // Auto-scroll to bottom when messages load initially
   const initialScrollCompleted = useRef(false);
@@ -136,10 +174,15 @@ export default function ChatScreen() {
     if (unreadIndex !== -1) {
       setFirstUnreadIndex(unreadIndex);
       setHasUnreadMessages(true);
+      // If we're not at the bottom and we get a new unread message, show the indicator immediately
+      if (!isAtBottom) {
+        setShowScrollToUnread(true);
+      }
     } else {
       setHasUnreadMessages(false);
+      setShowScrollToUnread(false);
     }
-  }, [messages]);
+  }, [messages, isAtBottom]);
 
   // Group messages by date
   const groupedMessages = useMemo(() => {
@@ -204,20 +247,41 @@ export default function ChatScreen() {
   };
 
   const scrollToUnreadMessages = () => {
-    if (firstUnreadIndex !== -1 && flatListRef.current) {
-      flatListRef.current.scrollToIndex({ 
-        index: firstUnreadIndex, 
-        animated: true,
-        viewPosition: 0.5 
-      });
+    if (!flatListRef.current) return;
+    
+    try {
+      // Simply scroll to the end instead of trying to find a specific message
+      flatListRef.current.scrollToEnd({ animated: true });
+      
+      // Mark all messages as read
+      MessagesService.markChatAsRead(id as string);
+      
+      // Update states to hide the indicator
+      setIsAtBottom(true);
+      setHasUnreadMessages(false);
       setShowScrollToUnread(false);
+    } catch (error) {
+      console.error('Error scrolling to bottom:', error);
     }
   };
 
-  const handleScroll = () => {
-    // Show the scroll to unread button when user has scrolled away
-    if (hasUnreadMessages) {
-      setShowScrollToUnread(true);
+  const handleScroll = (event: any) => {
+    // Calculate if user is at the bottom of the chat
+    const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
+    const paddingToBottom = 20;
+    const isCloseToBottom = layoutMeasurement.height + contentOffset.y >= 
+      contentSize.height - paddingToBottom;
+    
+    // Store the previous bottom state before updating
+    wasAtBottom.current = isAtBottom;
+    setIsAtBottom(isCloseToBottom);
+    
+    // If at bottom, mark chat as read and hide unread button
+    if (isCloseToBottom && hasUnreadMessages) {
+      MessagesService.markChatAsRead(id as string);
+      setShowScrollToUnread(false);
+      setHasUnreadMessages(false);
+      setUnreadCount(0);
     }
   };
 
@@ -230,6 +294,12 @@ export default function ChatScreen() {
     
     try {
       await MessagesService.sendMessage(id as string, messageContent);
+      // Ensure we scroll to the bottom after sending a message
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+        setIsAtBottom(true);
+        wasAtBottom.current = true;
+      }, 100);
     } catch (error) {
       console.error('Error sending message:', error);
       setNewMessage(messageContent); // Restore message if send fails
@@ -307,9 +377,22 @@ export default function ChatScreen() {
           keyExtractor={(item) => `group-${item.date.toISOString()}`}
           contentContainerStyle={styles.messagesList}
           onScroll={handleScroll}
+          onEndReachedThreshold={0.1}
+          onEndReached={() => {
+            // When reaching the end, mark as at bottom
+            setIsAtBottom(true);
+            wasAtBottom.current = true;
+            if (hasUnreadMessages) {
+              MessagesService.markChatAsRead(id as string);
+              setShowScrollToUnread(false);
+              setHasUnreadMessages(false);
+              setUnreadCount(0);
+            }
+          }}
           onContentSizeChange={() => {
-            // When sending a new message, scroll to bottom
-            if (sendingMessage) {
+            // When content size changes (e.g., new messages arrive)
+            // Scroll to bottom if we were at the bottom before
+            if (wasAtBottom.current) {
               flatListRef.current?.scrollToEnd({ animated: true });
             }
           }}
@@ -334,13 +417,15 @@ export default function ChatScreen() {
           )}
         />
         
-        {showScrollToUnread && hasUnreadMessages && (
+        {hasUnreadMessages && !isAtBottom && (
           <TouchableOpacity 
             style={[styles.unreadButton, { backgroundColor: theme.primary }]}
             onPress={scrollToUnreadMessages}
           >
-            <Ionicons name="arrow-down" size={18} color="white" />
-            <Text style={styles.unreadButtonText}>Unread messages</Text>
+            <Ionicons name="arrow-down" size={16} color="white" />
+            {unreadCount > 0 && (
+              <Text style={styles.unreadCountText}>{unreadCount}</Text>
+            )}
           </TouchableOpacity>
         )}
         
@@ -476,22 +561,24 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 80,
     right: 16,
+    height: 40,
+    minWidth: 40,
+    paddingHorizontal: 10,
+    borderRadius: 20,
     flexDirection: 'row',
+    justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
     elevation: 5,
   },
-  unreadButtonText: {
+  unreadCountText: {
     color: 'white',
-    fontSize: 12,
     fontWeight: 'bold',
-    marginLeft: 4,
+    marginLeft: 5,
+    fontSize: 14,
   },
   loadingContainer: {
     flex: 1,

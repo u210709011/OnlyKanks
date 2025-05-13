@@ -30,6 +30,7 @@ import EventPhotos from '../../components/EventPhotos';
 import EventComments from '../../components/EventComments';
 import { CommentService } from '../../services/comment.service';
 import UserRating from '../../components/UserRating';
+import { CategoriesService } from '../../services/categories.service';
 
 // Define a type for creator data
 interface CreatorData {
@@ -83,6 +84,11 @@ export default function EventScreen() {
   const [userPhotoMap, setUserPhotoMap] = useState<{[key: string]: string | null}>({});
   const [eventRating, setEventRating] = useState<number | null>(null);
   
+  // Category state variables
+  const [categoryName, setCategoryName] = useState<string>('');
+  const [subCategoryName, setSubCategoryName] = useState<string>('');
+  const [categoryIcon, setCategoryIcon] = useState<string>('help-circle');
+  
   // State variables for adding participants
   const [showAddModal, setShowAddModal] = useState(false);
   const [participantName, setParticipantName] = useState('');
@@ -101,6 +107,45 @@ export default function EventScreen() {
   const userParticipant = user && event?.participants?.find(
     p => p.id === user.id && p.type === ParticipantType.USER
   );
+
+  // Fix: Check if the user is specifically an ACCEPTED participant
+  const isAcceptedParticipant = user && event ? (
+    // Case 1: User is the event creator
+    user.id === event.createdBy ||
+    // Case 2: User is an accepted participant
+    event.participants?.some(p => 
+      p.id === user.id && 
+      (p.status === AttendeeStatus.ACCEPTED || p.status === undefined)
+    )
+  ) : false;
+  
+  // Debug user participant status
+  useEffect(() => {
+    if (user && event) {
+      const participant = event.participants?.find(p => p.id === user.id);
+      console.log('DEBUG - Current user participant data:', participant ? JSON.stringify(participant) : 'Not a participant');
+      
+      // Log detailed eligibility information
+      const isCreator = user.id === event.createdBy;
+      const isAccepted = participant?.status === AttendeeStatus.ACCEPTED;
+      const hasNoStatus = participant?.status === undefined;
+      
+      console.log('DEBUG - Comment eligibility:');
+      console.log('  - Is creator:', isCreator);
+      console.log('  - Is accepted participant:', isAccepted);
+      console.log('  - Has no status (legacy):', hasNoStatus);
+      console.log('  - Final isAcceptedParticipant value:', isAcceptedParticipant);
+      
+      if (!isAcceptedParticipant) {
+        console.log('DEBUG - User CANNOT comment because:');
+        if (!isCreator && !participant) {
+          console.log('  - Not a participant at all');
+        } else if (!isCreator && participant && !isAccepted && !hasNoStatus) {
+          console.log('  - Participant status is:', participant.status);
+        }
+      }
+    }
+  }, [user, event, isAcceptedParticipant]);
 
   // Separate participants by status
   const pendingParticipants = event?.participants?.filter(
@@ -170,6 +215,16 @@ export default function EventScreen() {
           updatedAt: data.updatedAt.toDate(),
         } as Event;
         setEvent(eventData);
+
+        // Get category information if available
+        if (eventData.categoryId) {
+          setCategoryIcon(CategoriesService.getCategoryIconById(eventData.categoryId));
+          setCategoryName(CategoriesService.getCategoryNameById(eventData.categoryId));
+          
+          if (eventData.subCategoryId) {
+            setSubCategoryName(CategoriesService.getSubCategoryNameById(eventData.categoryId, eventData.subCategoryId));
+          }
+        }
 
         // Check if event is expired
         if (eventData.duration) {
@@ -858,6 +913,26 @@ export default function EventScreen() {
                 </TouchableOpacity>
               )}
             </View>
+
+            {/* Category information */}
+            {event.categoryId && (
+              <View style={styles.infoRow}>
+                <Ionicons 
+                  name={categoryIcon as keyof typeof Ionicons.glyphMap} 
+                  size={20} 
+                  color={isExpired ? theme.text + '60' : theme.primary} 
+                />
+                <Text style={[
+                  styles.infoText, 
+                  { 
+                    color: isExpired ? theme.text + '60' : theme.primary,
+                    fontWeight: '500'
+                  }
+                ]}>
+                  {categoryName}{subCategoryName ? ` › ${subCategoryName}` : ''}
+                </Text>
+              </View>
+            )}
           </View>
 
           {/* Event Details */}
@@ -1027,7 +1102,7 @@ export default function EventScreen() {
             <Text style={[styles.sectionTitle, { color: theme.text }]}>Photos</Text>
             <EventPhotos 
               eventId={event.id} 
-              isParticipant={(userParticipant !== undefined && userParticipant !== null) || isEventCreator === true} 
+              isParticipant={isAcceptedParticipant !== undefined || isEventCreator === true} 
             />
           </View>
 
@@ -1035,7 +1110,7 @@ export default function EventScreen() {
           <View style={[styles.section, { backgroundColor: theme.card }]}>
             <EventComments 
               eventId={event.id}
-              isParticipant={(userParticipant !== undefined && userParticipant !== null) || isEventCreator === true}
+              isParticipant={isAcceptedParticipant !== undefined}
             />
           </View>
           

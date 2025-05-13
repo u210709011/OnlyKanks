@@ -18,6 +18,7 @@ import { ParticipantType, Participant, AttendeeStatus } from '../../services/eve
 import { FriendsService, Friend } from '../../services/friends.service';
 import { UserService } from '../../services/user.service';
 import { EventsService } from '../../services/events.service';
+import CategorySelector from '../../components/events/CategorySelector';
 
 // Define the schema for validation
 const schema = yup.object().shape({
@@ -28,6 +29,8 @@ const schema = yup.object().shape({
   imageUrl: yup.string(),
   capacity: yup.number().positive('Capacity must be a positive number').min(2, 'Capacity must be at least 2 people').nullable(),
   duration: yup.number().positive('Duration must be a positive number').min(15, 'Duration must be at least 15 minutes').required('Duration is required'),
+  categoryId: yup.string(),
+  subCategoryId: yup.string(),
   addressDetails: yup.object().shape({
     street: yup.string(),
     city: yup.string(),
@@ -103,6 +106,10 @@ export default function CreateEventScreen(): React.ReactElement {
   const [participantName, setParticipantName] = useState<string>('');
   const [showAddModal, setShowAddModal] = useState<boolean>(false);
   const [addParticipantType, setAddParticipantType] = useState<ParticipantType>(ParticipantType.NON_USER);
+
+  // Category state variables
+  const [categoryId, setCategoryId] = useState<string | undefined>(undefined);
+  const [subCategoryId, setSubCategoryId] = useState<string | undefined>(undefined);
 
   // New state variables for friends list
   const [friends, setFriends] = useState<any[]>([]);
@@ -368,6 +375,10 @@ export default function CreateEventScreen(): React.ReactElement {
     setImagePreview(null);
     setImageUrl('');
     
+    // Reset category selections
+    setCategoryId(undefined);
+    setSubCategoryId(undefined);
+    
     // Reset participants to just the creator
     if (auth.currentUser) {
       const creatorParticipant: Participant = {
@@ -467,7 +478,9 @@ export default function CreateEventScreen(): React.ReactElement {
         uploadDate: serverTimestamp(), // Add upload date
         capacity: capacity ? parseInt(capacity, 10) : null,
         duration: duration ? parseInt(duration, 10) : null,
-        participants: participants
+        participants: participants,
+        categoryId: categoryId,
+        subCategoryId: subCategoryId
       };
 
       console.log('Event data being saved:', eventData);
@@ -1041,16 +1054,28 @@ export default function CreateEventScreen(): React.ReactElement {
           )}
         </View>
 
-        <Text style={[styles.label, { color: theme.text + '80', fontFamily: 'Roboto', marginTop: 16 }]}>Description</Text>
         <TextInput
           style={[styles.textArea, { backgroundColor: theme.input, color: theme.text }]}
-          placeholder="Event description"
+          placeholder="Describe your event..."
           placeholderTextColor={theme.text + '60'}
           multiline
+          numberOfLines={5}
           value={description}
           onChangeText={setDescription}
-          numberOfLines={6}
-          textAlignVertical="top"
+        />
+        
+        <Text style={[styles.label, { color: theme.text + '80', fontFamily: 'Roboto', marginTop: 16 }]}>Category</Text>
+        <CategorySelector
+          selectedCategoryId={categoryId}
+          selectedSubCategoryId={subCategoryId}
+          onCategorySelect={(catId, subCatId) => {
+            setCategoryId(catId);
+            setSubCategoryId(subCatId);
+          }}
+          onClear={() => {
+            setCategoryId(undefined);
+            setSubCategoryId(undefined);
+          }}
         />
 
         <Text style={[styles.label, { color: theme.text + '80', fontFamily: 'Roboto' }]}>Event Image</Text>

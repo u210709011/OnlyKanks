@@ -9,6 +9,9 @@ import { format } from 'date-fns';
 import { ChatListItem } from '../../components/chat/ChatListItem';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestore';
+import { db, auth } from '../../config/firebase';
+import { collections } from '../../services/firebase.service';
 
 export const unstable_settings = {
   // Make messages.tsx not show up in the tab bar
@@ -22,6 +25,55 @@ export default function MessagesScreen() {
   const [chats, setChats] = useState<Chat[]>([]);
   const [loading, setLoading] = useState(true);
   const isLoadingRef = useRef(false);
+  const chatsSubscriptionRef = useRef<(() => void) | null>(null);
+
+  // Subscribe to real-time chat updates
+  const subscribeToChats = useCallback(() => {
+    if (!auth.currentUser) return;
+
+    // Set up real-time listener for chats
+    const chatsRef = collection(db, collections.CHATS);
+    const q = query(
+      chatsRef,
+      where('participants', 'array-contains', auth.currentUser.uid),
+      orderBy('lastMessageDate', 'desc')
+    );
+    
+    setLoading(true);
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const updatedChats = snapshot.docs.map(doc => {
+        const data = doc.data();
+        let unreadCount = 0;
+        
+        // Get unread count for current user
+        if (data.unreadCounts && auth.currentUser && 
+            data.unreadCounts[auth.currentUser.uid] !== undefined) {
+          unreadCount = data.unreadCounts[auth.currentUser.uid];
+        }
+        
+        return {
+          id: doc.id,
+          ...data,
+          unreadCount,
+          unreadCounts: data.unreadCounts || {}
+        } as unknown as Chat;
+      });
+      
+      setChats(updatedChats);
+      setLoading(false);
+    }, (error) => {
+      console.error('Error subscribing to chats:', error);
+      setLoading(false);
+      // Fall back to one-time loading if subscription fails
+      loadChats();
+    });
+    
+    // Store the unsubscribe function for cleanup
+    chatsSubscriptionRef.current = unsubscribe;
+    
+    return unsubscribe;
+  }, []);
 
   const loadChats = async () => {
     // Prevent duplicate loading
@@ -47,13 +99,31 @@ export default function MessagesScreen() {
     }
   };
 
+  // Set up subscription when component mounts
+  useEffect(() => {
+    const unsubscribe = subscribeToChats();
+    
+    // Clean up subscription when component unmounts
+    return () => {
+      if (chatsSubscriptionRef.current) {
+        chatsSubscriptionRef.current();
+        chatsSubscriptionRef.current = null;
+      }
+    };
+  }, [subscribeToChats]);
+
+  // When screen gains focus, make sure subscription is active
   useFocusEffect(
     useCallback(() => {
-      // Only load if we don't have data yet or it's been more than 30 seconds
-      if (chats.length === 0 || Date.now() - lastLoadTime.current > 30000) {
-        loadChats();
+      // If we don't have an active subscription, set one up
+      if (!chatsSubscriptionRef.current) {
+        subscribeToChats();
       }
-    }, [])
+      
+      return () => {
+        // Don't unsubscribe when screen loses focus to keep updates coming
+      };
+    }, [subscribeToChats])
   );
 
   // Track last load time
@@ -65,7 +135,12 @@ export default function MessagesScreen() {
   }, [loading, chats]);
 
   const handleManualRefresh = () => {
-    loadChats();
+    // For manual refresh, unsubscribe and resubscribe
+    if (chatsSubscriptionRef.current) {
+      chatsSubscriptionRef.current();
+      chatsSubscriptionRef.current = null;
+    }
+    subscribeToChats();
   };
 
   return (

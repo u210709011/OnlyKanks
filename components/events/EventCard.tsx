@@ -12,6 +12,7 @@ import { Event, Participant, ParticipantType, AttendeeStatus } from '../../servi
 import { UserService } from '../../services/user.service';
 import { BlurView } from 'expo-blur';
 import { CommentService } from '../../services/comment.service';
+import { CategoriesService } from '../../services/categories.service';
 
 interface EventCardProps {
   event: Event;
@@ -57,6 +58,9 @@ export const EventCard: React.FC<EventCardProps> = ({ event, onPress }) => {
   const [isExpired, setIsExpired] = useState(false);
   const [isInvited, setIsInvited] = useState(false);
   const [eventRating, setEventRating] = useState<number | null>(null);
+  const [categoryIcon, setCategoryIcon] = useState<string>('help-circle');
+  const [categoryName, setCategoryName] = useState<string>('');
+  const [subCategoryName, setSubCategoryName] = useState<string>('');
 
   useEffect(() => {
     // Check if event is expired (current time is after event time + duration)
@@ -67,6 +71,16 @@ export const EventCard: React.FC<EventCardProps> = ({ event, onPress }) => {
     
     if (endTime && isPast(endTime)) {
       setIsExpired(true);
+    }
+
+    // Get category information
+    if (event.categoryId) {
+      setCategoryIcon(CategoriesService.getCategoryIconById(event.categoryId));
+      setCategoryName(CategoriesService.getCategoryNameById(event.categoryId));
+      
+      if (event.subCategoryId) {
+        setSubCategoryName(CategoriesService.getSubCategoryNameById(event.categoryId, event.subCategoryId));
+      }
     }
 
     const fetchCreator = async () => {
@@ -126,7 +140,7 @@ export const EventCard: React.FC<EventCardProps> = ({ event, onPress }) => {
         }
       }
     }
-  }, [event.createdBy, event.participants, user, event.date, event.duration, event.id]);
+  }, [event.createdBy, event.participants, user, event.date, event.duration, event.id, event.categoryId, event.subCategoryId]);
 
   const handlePress = () => {
     if (onPress) {
@@ -344,6 +358,22 @@ export const EventCard: React.FC<EventCardProps> = ({ event, onPress }) => {
         </Text>
         
         <View style={styles.metaInfo}>
+          {event.categoryId && (
+            <View style={styles.metaItem}>
+              <Ionicons 
+                name={categoryIcon as keyof typeof Ionicons.glyphMap} 
+                size={16} 
+                color={isExpired ? theme.text + '60' : theme.primary} 
+              />
+              <Text style={[
+                styles.metaText, 
+                { color: isExpired ? theme.text + '60' : theme.primary }
+              ]}>
+                {subCategoryName || categoryName}
+              </Text>
+            </View>
+          )}
+          
           <View style={styles.metaItem}>
             <Ionicons 
               name="time-outline" 

@@ -43,6 +43,8 @@ export interface Event {
       zip: string;
     };
   };
+  categoryId?: string;
+  subCategoryId?: string;
   imageUrl?: string;
   createdBy: string;
   createdAt: any;
@@ -58,6 +60,8 @@ export interface EventFilterOptions {
   longitude?: number;
   distance?: number;
   searchQuery?: string;
+  categoryId?: string;
+  subCategoryIds?: string[];
   dateRange?: {
     startDate: Date | null;
     endDate: Date | null;
@@ -171,6 +175,7 @@ export class EventsService {
     const allEvents = await this.getAllEvents();
     
     events = allEvents.filter(event => {
+      // Search query filter
       if (filterOptions.searchQuery && filterOptions.searchQuery.trim() !== '') {
         const query = filterOptions.searchQuery.toLowerCase();
         const matchesTitle = event.title.toLowerCase().includes(query);
@@ -182,6 +187,7 @@ export class EventsService {
         }
       }
       
+      // Date range filter
       if (filterOptions.dateRange) {
         const eventDate = event.date.toDate();
         
@@ -200,6 +206,7 @@ export class EventsService {
         }
       }
       
+      // Distance filter
       if (
         filterOptions.latitude !== undefined && 
         filterOptions.longitude !== undefined &&
@@ -213,6 +220,18 @@ export class EventsService {
         );
         
         if (distance > filterOptions.distance) {
+          return false;
+        }
+      }
+      
+      // Category filter
+      if (filterOptions.categoryId && event.categoryId !== filterOptions.categoryId) {
+        return false;
+      }
+      
+      // Subcategory filter
+      if (filterOptions.subCategoryIds && filterOptions.subCategoryIds.length > 0) {
+        if (!event.subCategoryId || !filterOptions.subCategoryIds.includes(event.subCategoryId)) {
           return false;
         }
       }

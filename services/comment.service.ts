@@ -40,6 +40,16 @@ export class CommentService {
     }
 
     try {
+      // Log debug info about the user and event
+      console.log('DEBUG - Adding comment for eventId:', eventId);
+      console.log('DEBUG - Current user:', auth.currentUser.uid);
+      
+      // First check if the user is allowed to comment
+      const canComment = await this.canUserCommentOnEvent(eventId, auth.currentUser.uid);
+      if (!canComment) {
+        throw new Error('You are not allowed to comment on this event. You must be an accepted participant.');
+      }
+      
       // Validate rating
       const validatedRating = Math.max(1, Math.min(5, Math.round(rating)));
       
@@ -62,6 +72,8 @@ export class CommentService {
         createdAt: serverTimestamp(),
       };
 
+      console.log('DEBUG - Comment data being submitted:', JSON.stringify(commentData));
+
       // Use setDoc with the specific document ID instead of addDoc
       await setDoc(doc(db, collections.EVENT_COMMENTS, commentId), commentData);
       
@@ -76,7 +88,14 @@ export class CommentService {
         createdAt: new Date(),
       };
     } catch (error) {
+      // Enhanced error logging
       console.error('Error adding comment:', error);
+      if (error instanceof Error) {
+        console.error('Error message:', error.message);
+      }
+      if (typeof error === 'object' && error !== null) {
+        console.error('Error details:', JSON.stringify(error));
+      }
       throw error;
     }
   }
@@ -90,6 +109,16 @@ export class CommentService {
       
       if (commentSnap.exists()) {
         const data = commentSnap.data();
+        
+        // Add null check for createdAt
+        let createdAtDate;
+        try {
+          createdAtDate = data.createdAt ? data.createdAt.toDate() : new Date();
+        } catch (error) {
+          console.error("Error parsing createdAt timestamp:", error);
+          createdAtDate = new Date();
+        }
+        
         return {
           id: commentSnap.id,
           eventId: data.eventId,
@@ -98,7 +127,7 @@ export class CommentService {
           userPhotoURL: data.userPhotoURL,
           text: data.text,
           rating: data.rating,
-          createdAt: (data.createdAt as Timestamp).toDate(),
+          createdAt: createdAtDate,
         };
       }
       
@@ -117,6 +146,15 @@ export class CommentService {
       const docSnapshot = querySnapshot.docs[0];
       const data = docSnapshot.data();
       
+      // Add null check for createdAt in the query result
+      let createdAtDate;
+      try {
+        createdAtDate = data.createdAt ? data.createdAt.toDate() : new Date();
+      } catch (error) {
+        console.error("Error parsing queried createdAt timestamp:", error);
+        createdAtDate = new Date();
+      }
+      
       return {
         id: docSnapshot.id,
         eventId: data.eventId,
@@ -125,7 +163,7 @@ export class CommentService {
         userPhotoURL: data.userPhotoURL,
         text: data.text,
         rating: data.rating,
-        createdAt: (data.createdAt as Timestamp).toDate(),
+        createdAt: createdAtDate,
       };
     } catch (error) {
       console.error('Error checking for existing comment:', error);
@@ -144,6 +182,16 @@ export class CommentService {
       const querySnapshot = await getDocs(commentsQuery);
       return querySnapshot.docs.map(docSnapshot => {
         const data = docSnapshot.data();
+        
+        // Add null check for createdAt
+        let createdAtDate;
+        try {
+          createdAtDate = data.createdAt ? data.createdAt.toDate() : new Date();
+        } catch (error) {
+          console.error("Error parsing createdAt timestamp:", error);
+          createdAtDate = new Date();
+        }
+        
         return {
           id: docSnapshot.id,
           eventId: data.eventId,
@@ -152,7 +200,7 @@ export class CommentService {
           userPhotoURL: data.userPhotoURL,
           text: data.text,
           rating: data.rating,
-          createdAt: (data.createdAt as Timestamp).toDate(),
+          createdAt: createdAtDate,
         };
       });
     } catch (error) {
@@ -176,6 +224,16 @@ export class CommentService {
         const commentsData: EventComment[] = [];
         snapshot.forEach((docSnapshot) => {
           const data = docSnapshot.data();
+          
+          // Add proper null check for createdAt
+          let createdAtDate;
+          try {
+            createdAtDate = data.createdAt ? data.createdAt.toDate() : new Date();
+          } catch (error) {
+            console.error("Error parsing createdAt timestamp:", error);
+            createdAtDate = new Date();
+          }
+          
           commentsData.push({
             id: docSnapshot.id,
             eventId: data.eventId,
@@ -184,7 +242,7 @@ export class CommentService {
             userPhotoURL: data.userPhotoURL,
             text: data.text,
             rating: data.rating,
-            createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
+            createdAt: createdAtDate,
           });
         });
         callback(commentsData);
@@ -263,6 +321,49 @@ export class CommentService {
     } catch (error) {
       console.error('Error calculating user rating:', error);
       throw error;
+    }
+  }
+
+  // Add a helper method to check if a user is allowed to comment on an event
+  static async canUserCommentOnEvent(eventId: string, userId: string): Promise<boolean> {
+    try {
+      // Check if the event exists
+      const eventDoc = await getDoc(doc(db, collections.EVENTS, eventId));
+      if (!eventDoc.exists()) {
+        console.error('Event not found:', eventId);
+        return false;
+      }
+      
+      const eventData = eventDoc.data();
+      
+      // Check if the user is the event creator
+      if (eventData.createdBy === userId) {
+        console.log('DEBUG - User is the event creator, can comment');
+        return true;
+      }
+      
+      // Check if the user is a participant with accepted status
+      const participants = eventData.participants || [];
+      const participant = participants.find((p: any) => p.id === userId);
+      
+      if (!participant) {
+        console.log('DEBUG - User is not a participant in this event');
+        return false;
+      }
+      
+      console.log('DEBUG - Found participant:', JSON.stringify(participant));
+      
+      // Check if user has ACCEPTED status or is a participant without status (for backward compatibility)
+      const hasAcceptedStatus = 
+        participant.status === 'accepted' || 
+        participant.status === undefined;
+      
+      console.log('DEBUG - Has accepted status:', hasAcceptedStatus);
+      
+      return hasAcceptedStatus;
+    } catch (error) {
+      console.error('Error checking if user can comment:', error);
+      return false;
     }
   }
 } 

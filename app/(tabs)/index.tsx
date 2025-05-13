@@ -46,7 +46,9 @@ export default function ExploreScreen() {
       startDate: null,
       endDate: null
     },
-    sortBy: 'date-asc'
+    sortBy: 'date-asc',
+    categoryId: undefined,
+    subCategoryIds: []
   });
   const [filterLoading, setFilterLoading] = useState(false);
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
@@ -192,7 +194,9 @@ export default function ExploreScreen() {
       
       const filterOptions: EventFilterOptions = {
         searchQuery: appliedFilters.searchQuery,
-        dateRange: appliedFilters.dateRange
+        dateRange: appliedFilters.dateRange,
+        categoryId: appliedFilters.categoryId,
+        subCategoryIds: appliedFilters.subCategoryIds
       };
       
       // Add location filtering if we have coordinates
@@ -202,8 +206,8 @@ export default function ExploreScreen() {
         filterOptions.distance = appliedFilters.distance;
       }
       
-      const eventsData = await EventsService.getFilteredEvents(filterOptions);
-      setEvents(eventsData);
+      const filteredEvents = await EventsService.getFilteredEvents(filterOptions);
+      setEvents(filteredEvents);
     } catch (error) {
       console.error('Error fetching events:', error);
     } finally {
