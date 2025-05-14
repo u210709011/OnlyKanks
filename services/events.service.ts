@@ -5,6 +5,7 @@ import { db } from '../config/firebase';
 import uuid from 'react-native-uuid';
 import { startOfDay, endOfDay, isAfter, isBefore, isEqual, addMinutes } from 'date-fns';
 import { UserService } from './user.service';
+import { NotificationService } from './notification.service';
 
 export enum ParticipantType {
   USER = 'user',
@@ -341,6 +342,23 @@ export class EventsService {
         participants: [...participants, newParticipant]
       });
       
+      // Send a notification to the invited user
+      try {
+        const currentUser = auth.currentUser;
+        const userDoc = await getDoc(doc(db, collections.USERS, currentUser!.uid));
+        const userName = userDoc.exists() ? userDoc.data().displayName || currentUser!.displayName : 'Someone';
+        
+        await NotificationService.sendEventInviteNotification(
+          userId,
+          userName,
+          eventData.title,
+          eventId
+        );
+      } catch (error) {
+        console.error('Error sending invitation notification:', error);
+        // Continue even if notification fails
+      }
+      
       return eventId; // Return the event ID instead of invitation ID
     } catch (error) {
       console.error('Error inviting user to event:', error);
@@ -502,6 +520,23 @@ export class EventsService {
     await updateDoc(eventRef, {
       participants: participants
     });
+    
+    // Send notification to the user
+    try {
+      // Get event and creator data for the notification
+      const userData = await UserService.getUser(auth.currentUser.uid);
+      const hostName = userData?.displayName || auth.currentUser.displayName || 'Event Host';
+      
+      await NotificationService.sendEventRequestAcceptedNotification(
+        participantId,
+        hostName,
+        eventData.title,
+        eventId
+      );
+    } catch (error) {
+      console.error('Error sending request accepted notification:', error);
+      // Continue even if notification fails
+    }
   }
   
   // Reject a user's request to join an event
@@ -539,6 +574,22 @@ export class EventsService {
     await updateDoc(eventRef, {
       participants: participants
     });
+    
+    // Send notification to the user
+    try {
+      // Get event and creator data for the notification
+      const userData = await UserService.getUser(auth.currentUser.uid);
+      const hostName = userData?.displayName || auth.currentUser.displayName || 'Event Host';
+      
+      await NotificationService.sendEventRequestDeclinedNotification(
+        participantId,
+        hostName,
+        eventData.title
+      );
+    } catch (error) {
+      console.error('Error sending request declined notification:', error);
+      // Continue even if notification fails
+    }
   }
 
   // Get events that a user is attending (but not created by them)

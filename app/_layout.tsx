@@ -6,6 +6,9 @@ import { useTheme } from '../context/theme.context';
 import { Platform, StatusBar, NativeModules } from 'react-native';
 import * as SystemUI from 'expo-system-ui';
 import * as NavigationBar from 'expo-navigation-bar';
+import { PushNotificationService } from '../services/push-notification.service';
+import { auth } from '../config/firebase';
+import { onAuthStateChanged } from 'firebase/auth';
 
 function StackLayout() {
   const { theme, isDark } = useTheme();
@@ -33,6 +36,22 @@ function StackLayout() {
 
     setupSystemUI();
   }, [isDark, theme]);
+
+  // Register for push notifications when user is authenticated
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        try {
+          // Register for push notifications
+          await PushNotificationService.registerForPushNotifications();
+        } catch (error) {
+          console.error('Error registering for push notifications:', error);
+        }
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   return (
     <>

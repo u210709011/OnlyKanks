@@ -16,6 +16,7 @@ import {
   orderBy
 } from 'firebase/firestore';
 import { UserService } from './user.service';
+import { NotificationService } from './notification.service';
 
 export enum FriendRequestStatus {
   PENDING = 'pending',
@@ -73,6 +74,23 @@ export class FriendsService {
     };
 
     const docRef = await addDoc(collection(db, collections.FRIEND_REQUESTS), requestData);
+    
+    // Send notification to the receiver
+    try {
+      const currentUser = auth.currentUser;
+      const userDoc = await UserService.getUser(currentUser.uid);
+      const senderName = userDoc?.displayName || currentUser.displayName || 'Someone';
+      
+      await NotificationService.sendFriendRequestNotification(
+        receiverId,
+        senderName,
+        currentUser.uid
+      );
+    } catch (error) {
+      console.error('Error sending friend request notification:', error);
+      // Continue even if notification fails
+    }
+    
     return docRef.id;
   }
 

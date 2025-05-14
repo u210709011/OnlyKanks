@@ -1,6 +1,7 @@
 import { FirebaseService, collections } from './firebase.service';
 import { auth, db } from '../config/firebase';
 import { collection, query, where, orderBy, getDocs, addDoc, onSnapshot, doc, getDoc, writeBatch, increment } from 'firebase/firestore';
+import { NotificationService } from './notification.service';
 
 export interface Message {
   id: string;
@@ -117,6 +118,30 @@ export class MessagesService {
     batch.update(chatRef, updateData);
     
     await batch.commit();
+
+    try {
+      // Create a notification for the message
+      // Only if this is a new message, not a reply in an active chat
+      const isNewMessage = unreadCounts[receiverId] === 0;
+      
+      // Get sender name
+      const userDoc = await getDoc(doc(db, collections.USERS, auth.currentUser.uid));
+      const senderName = userDoc.exists() ? userDoc.data().displayName : 'Someone';
+      
+      if (isNewMessage) {
+        // Send notification for new message
+        await NotificationService.sendMessageNotification(
+          receiverId,
+          senderName,
+          content,
+          chatId
+        );
+      }
+    } catch (error) {
+      console.error('Error creating message notification:', error);
+      // Don't throw here, message was already sent successfully
+    }
+    
     return chatId;
   }
 
@@ -269,5 +294,53 @@ export class MessagesService {
     if (batchCount > 0) {
       await batch.commit();
     }
+  }
+
+  static async findExistingChat(otherUserId: string): Promise<string | null> {
+    if (!auth.currentUser) throw new Error('Not authenticated');
+    
+    const currentUserId = auth.currentUser.uid;
+    
+    // Check if chat already exists
+    const chatsRef = collection(db, collections.CHATS);
+    const q = query(
+      chatsRef,
+      where('participants', 'array-contains', currentUserId)
+    );
+    
+    const querySnapshot = await getDocs(q);
+    const existingChat = querySnapshot.docs.find(doc => {
+      const chatData = doc.data();
+      return chatData.participants.includes(otherUserId);
+    });
+
+    if (existingChat) {
+      return existingChat.id;
+    }
+
+    return null;
+  }
+
+  static async createChat(otherUserId: string): Promise<string> {
+    if (!auth.currentUser) throw new Error('Not authenticated');
+    
+    const currentUserId = auth.currentUser.uid;
+    
+    // Create new chat with initialized unread counts for both users
+    const unreadCounts: { [key: string]: number } = {};
+    unreadCounts[currentUserId] = 0;
+    unreadCounts[otherUserId] = 0;
+
+    const newChat = {
+      participants: [currentUserId, otherUserId],
+      createdAt: new Date(),
+      lastMessageDate: new Date(),
+      lastMessage: '',
+      unreadCounts,
+    };
+
+    const chatsRef = collection(db, collections.CHATS);
+    const docRef = await addDoc(chatsRef, newChat);
+    return docRef.id;
   }
 } 

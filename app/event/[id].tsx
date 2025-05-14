@@ -31,6 +31,7 @@ import EventComments from '../../components/EventComments';
 import { CommentService } from '../../services/comment.service';
 import UserRating from '../../components/UserRating';
 import { CategoriesService } from '../../services/categories.service';
+import { NotificationService } from '../../services/notification.service';
 
 // Define a type for creator data
 interface CreatorData {
@@ -593,14 +594,25 @@ export default function EventScreen() {
         participants: updatedParticipants
       });
       
-      // Update local state
-      setEvent({
-        ...event,
-        participants: updatedParticipants
-      });
+      // Send notification to the event creator about the join request
+      try {
+        const userName = user?.displayName || 'Someone';
+        
+        await NotificationService.createNotification(
+          event.createdBy,
+          'event_request',
+          'New Join Request',
+          `${userName} wants to join your event: ${event.title}`,
+          { eventId: event.id, userId: user?.id }
+        );
+      } catch (notificationError) {
+        console.error('Error sending join request notification:', notificationError);
+        // Continue even if notification sending fails
+      }
       
-      setShowAddModal(false);
-      Alert.alert('Success', `Invitation sent to ${friend.displayName}`);
+      // Refresh the event data
+      await fetchEventData();
+      Alert.alert("Success", "Request to join sent successfully");
     } catch (error) {
       console.error('Error inviting friend:', error);
       Alert.alert('Error', 'Failed to send invitation');
@@ -679,13 +691,24 @@ export default function EventScreen() {
         participants: updatedParticipants
       });
       
-      // Update local state
-      setEvent({
-        ...event,
-        participants: updatedParticipants
-      });
+      // Send notification to the event creator about the join request
+      try {
+        const userName = user?.displayName || 'Someone';
+        
+        await NotificationService.createNotification(
+          event.createdBy,
+          'event_request',
+          'New Join Request',
+          `${userName} wants to join your event: ${event.title}`,
+          { eventId: event.id, userId: user?.id }
+        );
+      } catch (notificationError) {
+        console.error('Error sending join request notification:', notificationError);
+        // Continue even if notification sending fails
+      }
       
-      setShowAddModal(false);
+      // Refresh the event data
+      await fetchEventData();
       Alert.alert('Success', 'Participant added successfully');
     } catch (error) {
       console.error('Error adding participant:', error);
@@ -897,6 +920,21 @@ export default function EventScreen() {
                       await updateDoc(doc(db, 'events', event.id), {
                         participants: arrayUnion(newParticipant)
                       });
+                      
+                      // Send notification to the event creator
+                      try {
+                        const userName = user.displayName || 'Someone';
+                        
+                        await NotificationService.sendEventRequestNotification(
+                          event.createdBy,
+                          userName,
+                          event.title,
+                          event.id
+                        );
+                      } catch (notificationError) {
+                        console.error('Error sending join request notification:', notificationError);
+                        // Continue even if notification sending fails
+                      }
                     
                       // Refresh the event data
                       await fetchEventData();
@@ -908,8 +946,11 @@ export default function EventScreen() {
                       setIsUpdating(false);
                     }
                   }}
+                  disabled={isUpdating}
                 >
-                  <Text style={styles.joinButtonText}>Join</Text>
+                  <Text style={styles.joinButtonText}>
+                    {isUpdating ? 'Sending...' : 'Request to Join'}
+                  </Text>
                 </TouchableOpacity>
               )}
             </View>

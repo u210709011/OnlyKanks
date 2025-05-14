@@ -9,6 +9,8 @@ interface ThemeColors {
   primary: string;
   error: string;
   input: string;
+  inputBackground: string;
+  textSecondary: string;
 }
 
 export const lightTheme: ThemeColors = {
@@ -19,6 +21,8 @@ export const lightTheme: ThemeColors = {
   primary: '#007AFF',
   error: '#ff4444',
   input: '#f0f0f0',
+  inputBackground: '#e8e8e8',
+  textSecondary: '#666666',
 };
 
 export const darkTheme: ThemeColors = {
@@ -29,6 +33,8 @@ export const darkTheme: ThemeColors = {
   primary: '#0A84FF',
   error: '#ff6b6b',
   input: '#2c2c2c',
+  inputBackground: '#333333',
+  textSecondary: '#b0b0b0',
 };
 
 interface ThemeContextType {

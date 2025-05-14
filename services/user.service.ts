@@ -19,6 +19,7 @@ export interface User {
   updatedAt: Timestamp;
   lastSeen?: Timestamp;
   isOnline?: boolean;
+  username?: string;
 }
 
 export class UserService {
@@ -135,6 +136,38 @@ export class UserService {
       return users;
     } catch (error) {
       console.error('Error searching users:', error);
+      return [];
+    }
+  }
+
+  static async getFriends(): Promise<User[]> {
+    try {
+      if (!auth.currentUser) return [];
+      
+      // Query friends collection to get friend IDs
+      const friendsRef = collection(db, collections.FRIENDS);
+      const q = query(
+        friendsRef,
+        where('userId', '==', auth.currentUser.uid)
+      );
+      
+      const friendsSnapshot = await getDocs(q);
+      
+      if (friendsSnapshot.empty) {
+        return [];
+      }
+      
+      // Extract friend IDs
+      const friendIds = friendsSnapshot.docs.map(doc => doc.data().friendId);
+      
+      // Fetch user data for each friend
+      const friendPromises = friendIds.map(friendId => this.getUser(friendId));
+      const friends = await Promise.all(friendPromises);
+      
+      // Filter out null values (in case some users were deleted)
+      return friends.filter(friend => friend !== null) as User[];
+    } catch (error) {
+      console.error('Error fetching friends:', error);
       return [];
     }
   }

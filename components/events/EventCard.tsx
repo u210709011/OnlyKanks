@@ -13,6 +13,7 @@ import { UserService } from '../../services/user.service';
 import { BlurView } from 'expo-blur';
 import { CommentService } from '../../services/comment.service';
 import { CategoriesService } from '../../services/categories.service';
+import { NotificationService } from '../../services/notification.service';
 
 interface EventCardProps {
   event: Event;
@@ -203,6 +204,22 @@ export const EventCard: React.FC<EventCardProps> = ({ event, onPress }) => {
       await updateDoc(eventRef, {
         participants: arrayUnion(newParticipant)
       });
+
+      // Send notification to the event creator
+      try {
+        const userName = user.displayName || 'Someone';
+        
+        // Send a notification to the event creator about the join request
+        await NotificationService.sendEventRequestNotification(
+          event.createdBy,
+          userName,
+          event.title,
+          event.id
+        );
+      } catch (notificationError) {
+        console.error('Error sending join request notification:', notificationError);
+        // Continue even if notification sending fails
+      }
 
       setIsJoinRequested(true);
       Alert.alert("Success", "Request to join sent successfully");
