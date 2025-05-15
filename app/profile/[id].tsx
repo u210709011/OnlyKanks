@@ -262,10 +262,10 @@ export default function UserProfileScreen() {
         borderBottomWidth: 1
       }]}>
         <TouchableOpacity
-          style={[styles.backButton, { backgroundColor: theme.card }]}
+          style={[styles.backButton]}
           onPress={() => router.back()}
         >
-          <Ionicons name="arrow-back" size={24} color={theme.text} />
+          <Ionicons name="arrow-back" size={24} color={theme.primary} />
         </TouchableOpacity>
         <Text style={[styles.username, { color: theme.text }]}>{displayName}</Text>
         <View style={{ width: 40 }} />

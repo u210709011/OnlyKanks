@@ -1,5 +1,5 @@
-import { View, Text, StyleSheet, FlatList, Pressable, Image } from 'react-native';
-import { useRouter } from 'expo-router';
+import { View, Text, StyleSheet, FlatList, Pressable, Image, Button } from 'react-native';
+import { Stack, useRouter } from 'expo-router';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { useTheme } from '../../context/theme.context';
@@ -12,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestore';
 import { db, auth } from '../../config/firebase';
 import { collections } from '../../services/firebase.service';
+import { AppHeader } from '../../components/shared/AppHeader';
 
 export const unstable_settings = {
   // Make messages.tsx not show up in the tab bar
@@ -145,17 +146,15 @@ export default function MessagesScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <View style={{ height: insets.top, backgroundColor: theme.background }} />
-      
-      <View style={[styles.header, { backgroundColor: theme.background }]}>
-        <Text style={[styles.headerTitle, { color: theme.text }]}>Messages</Text>
-        <Pressable 
-          style={styles.composeButton}
-          onPress={() => router.push('/new-message')}
-        >
-          <Ionicons name="create-outline" size={24} color={theme.primary} />
-        </Pressable>
-      </View>
+      <Stack.Screen options={{ headerShown: false }} />
+      <AppHeader 
+        title="Messages" 
+        showBackButton={true}
+        rightIcon={{
+          name: "create-outline",
+          onPress: () => router.push('/new-message')
+        }}
+      />
       
       {chats.length === 0 && !loading ? (
         <View style={styles.emptyContainer}>

@@ -1,12 +1,13 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, StatusBar } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, Stack } from 'expo-router';
 import { useAuth } from '../../context/auth.context';
 import { useTheme } from '../../context/theme.context';
 import { auth } from '../../config/firebase';
 import { Ionicons } from '@expo/vector-icons';
 import { signOut } from '../../services/auth.service';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { AppHeader } from '../../components/shared/AppHeader';
 
 export const unstable_settings = {
   href: null,
@@ -60,13 +61,13 @@ const SettingsScreen = () => {
       icon: 'people-outline',
       title: 'Friends',
       subtitle: 'Manage your friends and requests',
-      onPress: () => router.push('/friends'),
+      onPress: () => router.push('/settings/friends'),
     },
     {
       icon: 'people-outline',
       title: 'Event Requests',
       subtitle: 'Manage requests to join your events',
-      onPress: () => router.push('/event-requests'),
+      onPress: () => router.push('/settings/event-requests'),
     },
     {
       icon: 'mail-outline',
@@ -171,7 +172,12 @@ const SettingsScreen = () => {
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
-      <View style={{ height: insets.top, backgroundColor: theme.background }} />
+      <Stack.Screen options={{ headerShown: false }} />
+      <AppHeader 
+        title="Settings" 
+        showBackButton={true}
+        onBackPress={() => router.push('/(tabs)/profile')}
+      />
       
       <ScrollView 
         style={styles.container}

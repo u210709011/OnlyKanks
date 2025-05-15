@@ -157,36 +157,6 @@ export default function TabLayout() {
           headerShown: false,
         }}
       />
-      
-      {/* Hidden tabs - we don't want these in the tab bar */}
-      <Tabs.Screen
-        name="friends"
-        options={{
-          href: null,
-          headerShown: false,
-        }}
-      />
-      <Tabs.Screen
-        name="messages"
-        options={{
-          href: null,
-          headerShown: false,
-        }}
-      />
-      <Tabs.Screen
-        name="settings"
-        options={{
-          href: null,
-          headerShown: false,
-        }}
-      />
-      <Tabs.Screen
-        name="event-requests"
-        options={{
-          href: null,
-          headerShown: false,
-        }}
-      />
     </Tabs>
   );
 }

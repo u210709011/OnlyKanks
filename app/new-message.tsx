@@ -7,6 +7,7 @@ import { UserService, User } from '../services/user.service';
 import { MessagesService } from '../services/messages.service';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { auth } from '../config/firebase';
+import { AppHeader } from '../components/shared/AppHeader';
 
 // For the new message screen, we'll use a combined type 
 type DisplayUser = {
@@ -176,16 +177,12 @@ export default function NewMessageScreen() {
     <View style={[styles.container, { backgroundColor: theme.background }]}>
       <Stack.Screen 
         options={{
-          title: 'New Message',
-          headerStyle: {
-            backgroundColor: theme.background,
-          },
-          headerTitleStyle: {
-            color: theme.text,
-            fontFamily: 'Roboto',
-          },
-          headerTintColor: theme.primary,
+          headerShown: false
         }}
+      />
+      <AppHeader 
+        title="New Message" 
+        showBackButton={true}
       />
       
       <View style={[styles.searchContainer, { backgroundColor: theme.inputBackground }]}>

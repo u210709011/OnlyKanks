@@ -1,5 +1,5 @@
 import { View, Text, StyleSheet, FlatList } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, Stack } from 'expo-router';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { useTheme } from '../../context/theme.context';
@@ -66,6 +66,7 @@ export default function EventRequestsScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
+      <Stack.Screen options={{ headerShown: false }} />
       <AppHeader title="Event Requests" showBackButton={true} />
       
       {events.length === 0 && !loading ? (

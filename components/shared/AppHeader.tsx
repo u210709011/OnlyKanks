@@ -42,39 +42,41 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
         style={[
           styles.container, 
           { 
-            paddingTop: insets.top + 10,
+            paddingTop: insets.top,
             backgroundColor: transparent ? 'transparent' : theme.background,
             borderBottomColor: transparent ? 'transparent' : theme.border,
             borderBottomWidth: transparent ? 0 : StyleSheet.hairlineWidth,
           }
         ]}
       >
-        <View style={styles.leftContainer}>
-          {showBackButton && (
-            <TouchableOpacity 
-              style={styles.backButton} 
-              onPress={handleBackPress}
-              hitSlop={{ top: 15, right: 15, bottom: 15, left: 15 }}
-            >
-              <Ionicons name="chevron-back" size={28} color={theme.text} />
-            </TouchableOpacity>
-          )}
-        </View>
-        
-        <Text style={[styles.title, { color: theme.text }]}>
-          {title}
-        </Text>
-        
-        <View style={styles.rightContainer}>
-          {rightIcon && (
-            <TouchableOpacity 
-              style={styles.rightButton} 
-              onPress={rightIcon.onPress}
-              hitSlop={{ top: 15, right: 15, bottom: 15, left: 15 }}
-            >
-              <Ionicons name={rightIcon.name as any} size={24} color={theme.text} />
-            </TouchableOpacity>
-          )}
+        <View style={styles.contentContainer}>
+          <View style={styles.leftContainer}>
+            {showBackButton && (
+              <TouchableOpacity 
+                style={styles.backButton} 
+                onPress={handleBackPress}
+                hitSlop={{ top: 15, right: 15, bottom: 15, left: 15 }}
+              >
+                <Ionicons name="arrow-back" size={24} color={theme.primary} />
+              </TouchableOpacity>
+            )}
+          </View>
+          
+          <Text style={[styles.title, { color: theme.text }]}>
+            {title}
+          </Text>
+          
+          <View style={styles.rightContainer}>
+            {rightIcon && (
+              <TouchableOpacity 
+                style={styles.rightButton} 
+                onPress={rightIcon.onPress}
+                hitSlop={{ top: 15, right: 15, bottom: 15, left: 15 }}
+              >
+                <Ionicons name={rightIcon.name as any} size={24} color={theme.text} />
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
       </View>
     </>
@@ -83,6 +85,9 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
 
 const styles = StyleSheet.create({
   container: {
+    width: '100%',
+  },
+  contentContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -90,12 +95,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   leftContainer: {
-    width: 40,
+    width: 50,
     alignItems: 'flex-start',
+    justifyContent: 'center',
+    height: '100%',
   },
   rightContainer: {
-    width: 40,
+    width: 50,
     alignItems: 'flex-end',
+    justifyContent: 'center',
+    height: '100%',
   },
   title: {
     fontSize: 18,
@@ -105,9 +114,15 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   backButton: {
-    paddingVertical: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    height: 40,
+    width: 40,
   },
   rightButton: {
-    paddingVertical: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    height: 40,
+    width: 40,
   },
 }); 

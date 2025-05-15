@@ -25,6 +25,7 @@ export default function NotificationsSettingsScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
+      <Stack.Screen options={{ headerShown: false }} />
       <AppHeader title="Notifications" />
       
       <ScrollView 

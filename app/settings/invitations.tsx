@@ -8,6 +8,7 @@ import { format } from 'date-fns';
 import { auth, db } from '../../config/firebase';
 import { collection, query, where, getDocs, doc, getDoc, updateDoc } from 'firebase/firestore';
 import { EventsService } from '../../services/events.service';
+import { AppHeader } from '../../components/shared/AppHeader';
 
 interface InvitationEvent {
   id: string;
@@ -208,13 +209,8 @@ export default function InvitationsScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <Stack.Screen
-        options={{
-          title: 'Event Invitations',
-          headerStyle: { backgroundColor: theme.background },
-          headerTintColor: theme.text,
-        }}
-      />
+      <Stack.Screen options={{ headerShown: false }} />
+      <AppHeader title="Event Invitations" />
       
       {loading ? (
         <ActivityIndicator style={styles.loader} size="large" color={theme.primary} />

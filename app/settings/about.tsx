@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, Image, Linking, TouchableOpacity } from 'react-native';
+import { Stack } from 'expo-router';
 import { useTheme } from '../../context/theme.context';
 import { Ionicons } from '@expo/vector-icons';
 import { AppHeader } from '../../components/shared/AppHeader';
@@ -15,6 +16,7 @@ export default function AboutScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
+      <Stack.Screen options={{ headerShown: false }} />
       <AppHeader title="About" />
       
       <ScrollView 

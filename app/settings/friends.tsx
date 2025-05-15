@@ -1,7 +1,7 @@
 import { View, Text, StyleSheet, FlatList, Image, Pressable, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, Stack } from 'expo-router';
 import { useTheme } from '../../context/theme.context';
 import { FriendsService, FriendRequestStatus, FriendRequest, Friend } from '../../services/friends.service';
 import { UserService } from '../../services/user.service';
@@ -10,6 +10,7 @@ import { User } from '../../services/user.service';
 import { CustomButton } from '../../components/shared/CustomButton';
 import React from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { AppHeader } from '../../components/shared/AppHeader';
 
 export const unstable_settings = {
   href: null,
@@ -243,7 +244,8 @@ export default function FriendsScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <View style={{ height: insets.top }} />
+      <Stack.Screen options={{ headerShown: false }} />
+      <AppHeader title="Friends" />
       
       <View style={[styles.tabBar, { borderBottomColor: theme.border, borderBottomWidth: 0.5 }]}>
         <Pressable 

@@ -313,7 +313,7 @@ export default function ChatScreen() {
       <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
         <View style={styles.header}>
           <Pressable onPress={() => router.back()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color={theme.text} />
+            <Ionicons name="arrow-back" size={24} color={theme.primary} />
           </Pressable>
           <Text style={[styles.headerTitle, { color: theme.text }]}>Error</Text>
         </View>
@@ -330,7 +330,7 @@ export default function ChatScreen() {
       <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
         <View style={styles.header}>
           <Pressable onPress={() => router.back()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color={theme.text} />
+            <Ionicons name="arrow-back" size={24} color={theme.primary} />
           </Pressable>
           <Text style={[styles.headerTitle, { color: theme.text }]}>Loading...</Text>
         </View>
@@ -345,7 +345,7 @@ export default function ChatScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       <View style={[styles.header, { backgroundColor: theme.card }]}>
         <Pressable onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={theme.text} />
+          <Ionicons name="arrow-back" size={24} color={theme.primary} />
         </Pressable>
         
         <Pressable
