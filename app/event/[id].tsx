@@ -32,6 +32,7 @@ import { CommentService } from '../../services/comment.service';
 import UserRating from '../../components/UserRating';
 import { CategoriesService } from '../../services/categories.service';
 import { NotificationService } from '../../services/notification.service';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // Define a type for creator data
 interface CreatorData {
@@ -74,6 +75,7 @@ export default function EventScreen() {
   const [error, setError] = useState<string | null>(null);
   const { theme } = useTheme();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [creator, setCreator] = useState<CreatorData | null>(null);
   const { user } = useAuth();
   const [isUpdating, setIsUpdating] = useState(false);
@@ -744,28 +746,59 @@ export default function EventScreen() {
 
   if (loading) {
     return (
-      <View style={[styles.container, { backgroundColor: theme.background }]}>
-        <ActivityIndicator size="large" color={theme.text} />
+      <View style={[
+        styles.container, 
+        { 
+          backgroundColor: theme.background,
+          paddingTop: insets.top
+        }
+      ]}>
+        <ActivityIndicator style={{ marginTop: 50 }} size="large" color={theme.text} />
       </View>
     );
   }
 
   if (error || !event) {
     return (
-      <View style={[styles.container, { backgroundColor: theme.background }]}>
-        <Text style={[styles.errorText, { color: theme.text }]}>{error}</Text>
+      <View style={[
+        styles.container, 
+        { 
+          backgroundColor: theme.background,
+          paddingTop: insets.top
+        }
+      ]}>
+        <Text style={[styles.errorText, { color: theme.text, marginTop: 50 }]}>{error}</Text>
       </View>
     );
   }
 
   return (
     <>
-      <ScrollView style={[styles.container, { backgroundColor: theme.background }]}>
+      <View 
+        style={[
+          styles.statusBarBackground, 
+          { 
+            backgroundColor: theme.background,
+            height: insets.top
+          }
+        ]} 
+      />
+      <ScrollView 
+        style={[
+          styles.container, 
+          { 
+            backgroundColor: theme.background,
+          }
+        ]}
+        contentContainerStyle={{ paddingBottom: insets.bottom }}
+        contentInsetAdjustmentBehavior="automatic"
+      >
         <Stack.Screen
           options={{
             headerStyle: { backgroundColor: theme.background },
             headerTintColor: theme.text,
             title: event.title,
+            headerShown: false
           }}
         />
 
@@ -1232,6 +1265,20 @@ export default function EventScreen() {
         </View>
       </ScrollView>
       
+      {/* Fixed position, semi-transparent back button */}
+      <TouchableOpacity 
+        style={[
+          styles.floatingBackButton, 
+          { 
+            backgroundColor: 'rgba(0, 0, 0, 0.1)',
+            top: insets.top + 10,
+          }
+        ]}
+        onPress={() => router.back()}
+      >
+        <Ionicons name="arrow-back" size={24} color={theme.primary} />
+      </TouchableOpacity>
+
       {/* Manage Requests Modal */}
       <Modal
         animationType="slide"
@@ -1479,18 +1526,25 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  statusBarBackground: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 999,
+  },
   imageWrapper: {
     position: 'relative',
     width: '100%',
-    height: 300,
+    height: 250,
   },
   image: {
     width: '100%',
-    height: 300,
+    height: 250,
   },
   imagePlaceholder: {
     width: '100%',
-    height: 300,
+    height: 250,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1892,6 +1946,14 @@ const styles = StyleSheet.create({
   },
   ratingStars: {
     flexDirection: 'row',
+  },
+  floatingBackButton: {
+    position: 'absolute',
+    top: 40,
+    left: 20,
+    padding: 12,
+    borderRadius: 24,
+    zIndex: 10,
   },
 });
 
