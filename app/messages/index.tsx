@@ -65,7 +65,7 @@ export default function MessagesScreen() {
       setChats(updatedChats);
       setLoading(false);
     }, (error) => {
-      console.error('Error subscribing to chats:', error);
+      // Silently handle error
       setLoading(false);
       // Fall back to one-time loading if subscription fails
       loadChats();
@@ -76,7 +76,6 @@ export default function MessagesScreen() {
     
     // Listen for logout events to clean up
     const handleCleanup = () => {
-      console.log("Cleaning up chats listener");
       if (chatsSubscriptionRef.current) {
         chatsSubscriptionRef.current();
         chatsSubscriptionRef.current = null;
@@ -104,15 +103,14 @@ export default function MessagesScreen() {
       setLoading(true);
       
       // Migrate old chat format to new format
-      await MessagesService.migrateChatsToNewFormat().catch(error => {
-        console.error('Error migrating chats:', error);
+      await MessagesService.migrateChatsToNewFormat().catch(() => {
         // Continue even if migration fails
       });
       
       const chatsData = await MessagesService.getChats();
       setChats(chatsData);
     } catch (error) {
-      console.error('Error loading chats:', error);
+      // Silently handle error
     } finally {
       setLoading(false);
       isLoadingRef.current = false;

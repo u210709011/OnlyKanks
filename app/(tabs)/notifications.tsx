@@ -52,14 +52,13 @@ export default function NotificationsScreen() {
       setLoading(false);
       setRefreshing(false);
     }, (error) => {
-      console.error("Error in notifications listener:", error);
+      // Silently handle error
       setLoading(false);
       setRefreshing(false);
     });
     
     // Listen for logout events to clean up
     const handleCleanup = () => {
-      console.log("Cleaning up notifications listener");
       unsubscribe();
     };
     

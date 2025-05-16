@@ -31,7 +31,7 @@ const setupGlobalErrorHandler = () => {
       errorMessage.includes('Missing or insufficient permissions') ||
       (errorMessage.includes('FirebaseError') && !auth.currentUser)
     ) {
-      // Completely silence these errors - don't log anything
+      // Completely silence these errors
       return;
     }
     
@@ -43,17 +43,12 @@ const setupGlobalErrorHandler = () => {
 // Set up the error handler
 setupGlobalErrorHandler();
 
-console.log('APP LAYOUT: Initial load');
-
 function StackLayout() {
-  console.log('APP LAYOUT: StackLayout rendered');
   const { theme, isDark } = useTheme();
 
   // Set up system UI colors based on theme
   useEffect(() => {
-    console.log('APP LAYOUT: Theme effect running');
     const setupSystemUI = async () => {
-      console.log('APP LAYOUT: Setting up system UI');
       if (Platform.OS === 'android') {
         try {
           // Set status bar color and style
@@ -66,9 +61,8 @@ function StackLayout() {
 
           // Also use SystemUI for general background
           await SystemUI.setBackgroundColorAsync(isDark ? '#121212' : '#FFFFFF');
-          console.log('APP LAYOUT: System UI setup complete');
         } catch (error) {
-          console.warn('Error setting navigation bar color:', error);
+          // Silently handle error
         }
       }
     };
@@ -120,8 +114,6 @@ function StackLayout() {
 }
 
 export default function RootLayout() {
-  console.log('APP LAYOUT: RootLayout rendered');
-  
   // Simple error boundary
   try {
     return (
@@ -132,7 +124,6 @@ export default function RootLayout() {
       </AuthProvider>
     );
   } catch (error) {
-    console.error('CRITICAL ERROR in RootLayout:', error);
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
         <Text style={{ color: 'red', fontSize: 16, textAlign: 'center' }}>

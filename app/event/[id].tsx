@@ -127,34 +127,6 @@ export default function EventScreen() {
     )
   ) : false;
   
-  // Debug user participant status
-  useEffect(() => {
-    if (user && event) {
-      const participant = event.participants?.find(p => p.id === user.id);
-      console.log('DEBUG - Current user participant data:', participant ? JSON.stringify(participant) : 'Not a participant');
-      
-      // Log detailed eligibility information
-      const isCreator = user.id === event.createdBy;
-      const isAccepted = participant?.status === AttendeeStatus.ACCEPTED;
-      const hasNoStatus = participant?.status === undefined;
-      
-      console.log('DEBUG - Comment eligibility:');
-      console.log('  - Is creator:', isCreator);
-      console.log('  - Is accepted participant:', isAccepted);
-      console.log('  - Has no status (legacy):', hasNoStatus);
-      console.log('  - Final isAcceptedParticipant value:', isAcceptedParticipant);
-      
-      if (!isAcceptedParticipant) {
-        console.log('DEBUG - User CANNOT comment because:');
-        if (!isCreator && !participant) {
-          console.log('  - Not a participant at all');
-        } else if (!isCreator && participant && !isAccepted && !hasNoStatus) {
-          console.log('  - Participant status is:', participant.status);
-        }
-      }
-    }
-  }, [user, event, isAcceptedParticipant]);
-
   // Separate participants by status
   const pendingParticipants = event?.participants?.filter(
     p => p.status === AttendeeStatus.PENDING
@@ -232,10 +204,9 @@ export default function EventScreen() {
             const userData = await UserService.getUser(userId);
             if (userData?.photoURL) {
               photoMap[userId] = userData.photoURL;
-              console.log(`Found photo for user ${userId}: ${userData.photoURL}`);
             }
           } catch (error) {
-            console.error(`Error fetching photo for user ${userId}:`, error);
+            // Silent error handling
           }
         })
       );
@@ -300,13 +271,12 @@ export default function EventScreen() {
           const avgRating = await CommentService.getAverageRating(eventData.id);
           setEventRating(avgRating);
         } catch (error) {
-          console.error('Error fetching event rating:', error);
+          // Silent error handling
         }
       } else {
         setError('Event not found');
       }
     } catch (error) {
-      console.error('Error fetching event:', error);
       setError('Error loading event');
     } finally {
       setLoading(false);

@@ -19,7 +19,6 @@ export default function TabLayout() {
   // Get user profile image
   useEffect(() => {
     if (auth.currentUser?.photoURL) {
-      console.log("setting profile image", auth.currentUser.photoURL);
       setProfileImage(auth.currentUser.photoURL);
     }
   }, []);
@@ -38,13 +37,11 @@ export default function TabLayout() {
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setUnreadCount(snapshot.docs.length);
     }, (error) => {
-      console.error('Error in unread notifications listener:', error);
-      // Don't update unread count on error
+      // Silently handle error
     });
 
     // Listen for logout events to clean up
     const handleCleanup = () => {
-      console.log("Cleaning up unread notifications listener");
       unsubscribe();
       setUnreadCount(0); // Reset count when logging out
     };
