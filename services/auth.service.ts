@@ -8,6 +8,7 @@ import { doc, setDoc, serverTimestamp, getDoc } from 'firebase/firestore';
 import { auth, db } from '../config/firebase';
 import { LocationService } from './location.service';
 import { collections } from './firebase.service';
+import { eventEmitter } from '../utils/events';
 
 export const signUp = async (email: string, password: string, displayName: string) => {
   try {
@@ -84,6 +85,12 @@ export const signOut = async () => {
         updatedAt: serverTimestamp()
       }, { merge: true });
     }
+    
+    // Emit cleanup event using RN's event emitter instead of window.dispatchEvent
+    eventEmitter.emit('firebaseCleanup');
+    
+    // Add a small delay to allow listeners to clean up
+    await new Promise(resolve => setTimeout(resolve, 100));
     
     return firebaseSignOut(auth);
   } catch (error) {

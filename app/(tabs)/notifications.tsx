@@ -9,6 +9,7 @@ import { auth, db } from '../../config/firebase';
 import { collection, query, where, orderBy, onSnapshot, Timestamp, getDocs } from 'firebase/firestore';
 import { collections } from '../../services/firebase.service';
 import { NotificationService } from '../../services/notification.service';
+import { eventEmitter } from '../../utils/events';
 
 interface Notification {
   id: string;
@@ -29,44 +30,69 @@ export default function NotificationsScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
-    fetchNotifications();
-  }, []);
-
-  const fetchNotifications = useCallback(async () => {
     if (!auth.currentUser) return;
-
-    try {
-      setLoading(true);
-      const notificationsRef = collection(db, collections.NOTIFICATIONS);
-      const q = query(
-        notificationsRef,
-        where('userId', '==', auth.currentUser.uid),
-        orderBy('createdAt', 'desc')
-      );
-
-      const snapshot = await getDocs(q);
+    
+    setLoading(true);
+    
+    // Set up real-time listener for notifications
+    const notificationsRef = collection(db, collections.NOTIFICATIONS);
+    const q = query(
+      notificationsRef,
+      where('userId', '==', auth.currentUser.uid),
+      orderBy('createdAt', 'desc')
+    );
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
       const notificationsData = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       })) as Notification[];
       
       setNotifications(notificationsData);
-    } catch (error) {
-      console.error("Error fetching notifications:", error);
-    } finally {
       setLoading(false);
       setRefreshing(false);
-    }
+    }, (error) => {
+      console.error("Error in notifications listener:", error);
+      setLoading(false);
+      setRefreshing(false);
+    });
+    
+    // Listen for logout events to clean up
+    const handleCleanup = () => {
+      console.log("Cleaning up notifications listener");
+      unsubscribe();
+    };
+    
+    eventEmitter.addListener('firebaseCleanup', handleCleanup);
+    
+    // Clean up listeners on unmount
+    return () => {
+      unsubscribe();
+      eventEmitter.removeAllListeners('firebaseCleanup');
+    };
   }, []);
-
+  
+  // Update refresh function to use setTimeout to avoid issues with pull-to-refresh
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    fetchNotifications();
-  }, [fetchNotifications]);
+    // Just wait a short time and the refreshing state will be reset by the listener
+    setTimeout(() => {
+      if (refreshing) {
+        setRefreshing(false);
+      }
+    }, 1000);
+  }, [refreshing]);
 
   const handleNotificationPress = async (notification: Notification) => {
     if (!notification.read) {
       await NotificationService.markAsRead(notification.id);
+      
+      // Update local state to show the notification as read without refetching
+      setNotifications(prevNotifications => 
+        prevNotifications.map(item => 
+          item.id === notification.id ? { ...item, read: true } : item
+        )
+      );
     }
     
     switch(notification.type) {
@@ -88,6 +114,9 @@ export default function NotificationsScreen() {
       case 'event_request_accepted':
         router.push(`/event/${notification.data.eventId}`);
         break;
+      case 'event_request':
+        router.push('/settings/event-requests');
+        break;
       default:
         break;
     }
@@ -95,6 +124,11 @@ export default function NotificationsScreen() {
 
   const handleMarkAllAsRead = async () => {
     await NotificationService.markAllAsRead();
+    
+    // Update local state to show all notifications as read without refetching
+    setNotifications(prevNotifications => 
+      prevNotifications.map(item => ({ ...item, read: true }))
+    );
   };
 
   const getNotificationIcon = (type: string) => {
@@ -129,7 +163,9 @@ export default function NotificationsScreen() {
         <Text style={[styles.notificationTitle, { color: theme.text }]}>{item.title}</Text>
         <Text style={[styles.notificationBody, { color: theme.text + '80' }]}>{item.body}</Text>
         <Text style={[styles.notificationTime, { color: theme.text + '60' }]}>
-          {format(item.createdAt.toDate(), 'MMM d, h:mm a')}
+          {item.createdAt && typeof item.createdAt.toDate === 'function' 
+            ? format(item.createdAt.toDate(), 'MMM d, h:mm a')
+            : 'Just now'}
         </Text>
       </View>
       {!item.read && <View style={[styles.unreadDot, { backgroundColor: theme.primary }]} />}

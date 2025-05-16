@@ -8,6 +8,7 @@ import { auth, db } from '../../config/firebase';
 import { useState, useEffect } from 'react';
 import { collections } from '../../services/firebase.service';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
+import { eventEmitter } from '../../utils/events';
 
 export default function TabLayout() {
   const { theme, isDark } = useTheme();
@@ -36,9 +37,24 @@ export default function TabLayout() {
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setUnreadCount(snapshot.docs.length);
+    }, (error) => {
+      console.error('Error in unread notifications listener:', error);
+      // Don't update unread count on error
     });
 
-    return () => unsubscribe();
+    // Listen for logout events to clean up
+    const handleCleanup = () => {
+      console.log("Cleaning up unread notifications listener");
+      unsubscribe();
+      setUnreadCount(0); // Reset count when logging out
+    };
+    
+    eventEmitter.addListener('firebaseCleanup', handleCleanup);
+
+    return () => {
+      unsubscribe();
+      eventEmitter.removeAllListeners('firebaseCleanup');
+    };
   }, []);
 
   return (

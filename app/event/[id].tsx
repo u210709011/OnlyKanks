@@ -87,6 +87,11 @@ export default function EventScreen() {
   const [userPhotoMap, setUserPhotoMap] = useState<{[key: string]: string | null}>({});
   const [eventRating, setEventRating] = useState<number | null>(null);
   
+  // Join button state variables
+  const [isJoinRequested, setIsJoinRequested] = useState(false);
+  const [isParticipating, setIsParticipating] = useState(false);
+  const [isInvited, setIsInvited] = useState(false);
+  
   // Category state variables
   const [categoryName, setCategoryName] = useState<string>('');
   const [subCategoryName, setSubCategoryName] = useState<string>('');
@@ -165,6 +170,42 @@ export default function EventScreen() {
     p => (p.status === AttendeeStatus.ACCEPTED || p.type === ParticipantType.NON_USER || p.id === event?.createdBy) && 
     p.status !== AttendeeStatus.INVITED
   ) || [];
+
+  // Effect to check user's participation status
+  useEffect(() => {
+    if (!user || !event || !event.participants) return;
+
+    // Check if user is creator
+    if (user.id === event.createdBy) {
+      setIsParticipating(true);
+      return;
+    }
+
+    // Check user participation status
+    const userParticipant = event.participants.find(
+      p => p.id === user.id && p.type === ParticipantType.USER
+    );
+
+    if (userParticipant) {
+      if (userParticipant.status === AttendeeStatus.ACCEPTED || userParticipant.status === undefined) {
+        setIsParticipating(true);
+        setIsJoinRequested(false);
+        setIsInvited(false);
+      } else if (userParticipant.status === AttendeeStatus.INVITED) {
+        setIsInvited(true);
+        setIsParticipating(false);
+        setIsJoinRequested(false);
+      } else if (userParticipant.status === AttendeeStatus.PENDING) {
+        setIsJoinRequested(true);
+        setIsParticipating(false);
+        setIsInvited(false);
+      }
+    } else {
+      setIsParticipating(false);
+      setIsJoinRequested(false);
+      setIsInvited(false);
+    }
+  }, [user, event]);
 
   useEffect(() => {
     fetchEventData();
@@ -596,30 +637,35 @@ export default function EventScreen() {
         participants: updatedParticipants
       });
       
-      // Send notification to the event creator about the join request
+      // Send invitation notification to the friend being invited
       try {
-        const userName = user?.displayName || 'Someone';
-        
-        await NotificationService.createNotification(
-          event.createdBy,
-          'event_request',
-          'New Join Request',
-          `${userName} wants to join your event: ${event.title}`,
-          { eventId: event.id, userId: user?.id }
-        );
+        if (!user) {
+          console.warn('Could not send invitation: missing user data');
+        } else {
+          const inviterName = user.displayName || 'Event Host';
+          const notificationId = await NotificationService.sendEventInviteNotification(
+            friend.id, // Send to the friend being invited
+            inviterName,
+            event.title || 'an event',
+            event.id
+          );
+          
+          console.log('Event invitation notification sent successfully:', notificationId);
+        }
       } catch (notificationError) {
-        console.error('Error sending join request notification:', notificationError);
+        console.error('Error sending event invitation notification:', notificationError);
         // Continue even if notification sending fails
       }
       
       // Refresh the event data
       await fetchEventData();
-      Alert.alert("Success", "Request to join sent successfully");
+      Alert.alert("Success", `Invitation sent to ${friend.displayName || 'user'}`);
     } catch (error) {
       console.error('Error inviting friend:', error);
       Alert.alert('Error', 'Failed to send invitation');
     } finally {
       setIsUpdating(false);
+      setShowAddModal(false);
     }
   };
 
@@ -693,20 +739,21 @@ export default function EventScreen() {
         participants: updatedParticipants
       });
       
-      // Send notification to the event creator about the join request
-      try {
-        const userName = user?.displayName || 'Someone';
-        
-        await NotificationService.createNotification(
-          event.createdBy,
-          'event_request',
-          'New Join Request',
-          `${userName} wants to join your event: ${event.title}`,
-          { eventId: event.id, userId: user?.id }
-        );
-      } catch (notificationError) {
-        console.error('Error sending join request notification:', notificationError);
-        // Continue even if notification sending fails
+      // Only send notification for user participants (not for non-user guests)
+      if (addParticipantType === ParticipantType.USER) {
+        try {
+          if (!user) {
+            console.warn('Could not send invitation: missing user data');
+          } else {
+            const inviterName = user.displayName || 'Event Host';
+            // Since we don't have a real user ID here, we won't send a real notification
+            // This is for manually added USER type participants
+            console.log('Would send invitation to:', participantName);
+            // In a real implementation, we would need the user's ID to send them a notification
+          }
+        } catch (notificationError) {
+          console.error('Error with invitation notification:', notificationError);
+        }
       }
       
       // Refresh the event data
@@ -742,6 +789,145 @@ export default function EventScreen() {
         </View>
       </View>
     );
+  };
+
+  // Function to handle join request or invitation acceptance
+  const handleJoinEvent = async () => {
+    if (!user) {
+      Alert.alert("Sign In Required", "Please sign in to join events");
+      return;
+    }
+
+    if (!event) return;
+
+    // If user is already participating, don't do anything
+    if (isParticipating) return;
+
+    // If user has been invited, accept invitation
+    if (isInvited) {
+      await acceptInvitation();
+      return;
+    }
+
+    // If capacity is reached, show alert
+    if (event.capacity && acceptedParticipants.length >= event.capacity) {
+      Alert.alert("Event Full", "This event has reached its maximum capacity");
+      return;
+    }
+
+    // If event is expired, show alert
+    if (isExpired) {
+      Alert.alert("Event Ended", "This event has already ended");
+      return;
+    }
+
+    // Otherwise, send join request
+    try {
+      setIsUpdating(true);
+      
+      // Fetch the latest user data to ensure we have their current photo
+      let photoURL = user.photoURL;
+      try {
+        const userData = await UserService.getUser(user.id);
+        if (userData && userData.photoURL) {
+          photoURL = userData.photoURL;
+        }
+      } catch (error) {
+        console.error("Error fetching updated user photo:", error);
+      }
+      
+      const newParticipant: Participant = {
+        id: user.id,
+        name: user.displayName || 'Anonymous User',
+        photoURL: photoURL || null,
+        type: ParticipantType.USER,
+        status: AttendeeStatus.PENDING
+      };
+    
+      // Update the event with the new participant
+      await updateDoc(doc(db, 'events', event.id), {
+        participants: arrayUnion(newParticipant)
+      });
+      
+      // Send notification to the event creator
+      try {
+        if (!event.createdBy) {
+          console.warn('Could not send notification: missing event creator ID');
+        } else {
+          const userName = user.displayName || 'Anonymous User';
+          const notificationId = await NotificationService.sendEventRequestNotification(
+            event.createdBy,
+            userName,
+            event.title || 'an event',
+            event.id
+          );
+          console.log('Join request notification sent successfully:', notificationId);
+        }
+      } catch (notificationError) {
+        console.error('Error sending join request notification:', notificationError);
+        // Continue with the operation even if notification fails
+      }
+    
+      // Update local state
+      setIsJoinRequested(true);
+      
+      // Refresh the event data
+      await fetchEventData();
+      Alert.alert("Success", "Request to join sent successfully");
+    } catch (error) {
+      console.error('Error requesting to join event:', error);
+      Alert.alert("Error", "Failed to send join request");
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  // Handle accepting an invitation
+  const acceptInvitation = async () => {
+    if (!user || !event) return;
+    
+    try {
+      setIsUpdating(true);
+      
+      // Get current participants
+      const updatedParticipants = [...(event.participants || [])];
+      
+      // Find user's participant entry
+      const participantIndex = updatedParticipants.findIndex(
+        p => p.id === user.id && p.status === AttendeeStatus.INVITED
+      );
+      
+      if (participantIndex >= 0) {
+        // Update status to ACCEPTED
+        updatedParticipants[participantIndex] = {
+          ...updatedParticipants[participantIndex],
+          status: AttendeeStatus.ACCEPTED,
+          // Update user info
+          name: user.displayName || updatedParticipants[participantIndex].name,
+          photoURL: user.photoURL || updatedParticipants[participantIndex].photoURL
+        };
+        
+        // Update event document
+        await updateDoc(doc(db, 'events', event.id), {
+          participants: updatedParticipants
+        });
+        
+        // Update local state
+        setIsInvited(false);
+        setIsParticipating(true);
+        setEvent({
+          ...event,
+          participants: updatedParticipants
+        });
+        
+        Alert.alert('Success', 'You have joined the event!');
+      }
+    } catch (error) {
+      console.error('Error accepting invitation:', error);
+      Alert.alert('Error', 'Failed to accept invitation');
+    } finally {
+      setIsUpdating(false);
+    }
   };
 
   if (loading) {
@@ -830,10 +1016,27 @@ export default function EventScreen() {
 
         <View style={styles.content}>
           <View style={styles.titleContainer}>
-            <Text style={[styles.title, { color: isExpired ? theme.text + '80' : theme.text }]}>
-              {event.title}
-            </Text>
-            {renderEventRating()}
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+              <Text style={[styles.title, { color: isExpired ? theme.text + '80' : theme.text, flex: 1 }]}>
+                {event.title}
+              </Text>
+              {!isEventCreator && !userParticipant && !isExpired && 
+                event.capacity && (acceptedParticipants.length < event.capacity) && (
+                <TouchableOpacity 
+                  style={[styles.joinEventButton, { backgroundColor: theme.primary }]}
+                  onPress={handleJoinEvent}
+                  disabled={isParticipating || (isJoinRequested && !isInvited) || isUpdating || isExpired}
+                >
+                  <Ionicons name="add-circle-outline" size={18} color="white" style={{ marginRight: 4 }} />
+                  <Text style={styles.joinEventButtonText}>
+                    {isUpdating ? 'Sending...' : 'Join'}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              {renderEventRating()}
+            </View>
           </View>
           
           {/* Creator information */}
@@ -914,79 +1117,60 @@ export default function EventScreen() {
                 {acceptedParticipants.length}/{event.capacity || '∞'} participants
                 {isEventCreator && invitedParticipants.length > 0 && ` (${invitedParticipants.length} invited)`}
               </Text>
-              {event.capacity && 
-                // Updated condition to consider total participants (accepted + invited)
-                (acceptedParticipants.length + invitedParticipants.length < event.capacity) && 
-                !isEventCreator && !userParticipant && !isExpired && (
-                <TouchableOpacity 
-                  style={[styles.joinButton, { backgroundColor: theme.primary }]}
-                  onPress={async () => {
-                    if (!user) {
-                      Alert.alert("Sign In Required", "Please sign in to join events");
-                      return;
-                    }
-                    
-                    try {
-                      setIsUpdating(true);
-                      
-                      // Fetch the latest user data to ensure we have their current photo
-                      let photoURL = user.photoURL;
-                      try {
-                        const userData = await UserService.getUser(user.id);
-                        if (userData && userData.photoURL) {
-                          photoURL = userData.photoURL;
-                        }
-                      } catch (error) {
-                        console.error("Error fetching updated user photo:", error);
-                        // Continue with join request even if we couldn't get the photo
-                      }
-                      
-                      const newParticipant: Participant = {
-                        id: user.id,
-                        name: user.displayName || 'Anonymous User',
-                        photoURL: photoURL || null,
-                        type: ParticipantType.USER,
-                        status: AttendeeStatus.PENDING
-                      };
-                    
-                      // Update the event with the new participant
-                      await updateDoc(doc(db, 'events', event.id), {
-                        participants: arrayUnion(newParticipant)
-                      });
-                      
-                      // Send notification to the event creator
-                      try {
-                        const userName = user.displayName || 'Someone';
-                        
-                        await NotificationService.sendEventRequestNotification(
-                          event.createdBy,
-                          userName,
-                          event.title,
-                          event.id
-                        );
-                      } catch (notificationError) {
-                        console.error('Error sending join request notification:', notificationError);
-                        // Continue even if notification sending fails
-                      }
-                    
-                      // Refresh the event data
-                      await fetchEventData();
-                      Alert.alert("Success", "Request to join sent successfully");
-                    } catch (error) {
-                      console.error('Error requesting to join event:', error);
-                      Alert.alert("Error", "Failed to send join request");
-                    } finally {
-                      setIsUpdating(false);
-                    }
-                  }}
-                  disabled={isUpdating}
-                >
-                  <Text style={styles.joinButtonText}>
-                    {isUpdating ? 'Sending...' : 'Request to Join'}
-                  </Text>
-                </TouchableOpacity>
-              )}
             </View>
+
+            {/* Join button - with proper state handling */}
+            {!isEventCreator && !isExpired && (
+              <TouchableOpacity 
+                style={[
+                  styles.prominentJoinButton, 
+                  { 
+                    backgroundColor: isParticipating 
+                      ? "#4CAF50"
+                      : isJoinRequested 
+                        ? theme.text + '30' 
+                        : isInvited
+                          ? theme.primary
+                          : theme.primary
+                  }
+                ]}
+                onPress={handleJoinEvent}
+                disabled={isParticipating || (isJoinRequested && !isInvited) || isUpdating || isExpired}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+                  <Ionicons 
+                    name={
+                      isParticipating 
+                        ? "checkmark-circle-outline" 
+                        : isJoinRequested 
+                          ? "time-outline" 
+                          : isInvited 
+                            ? "mail-open-outline"
+                            : "person-add-outline"
+                    } 
+                    size={24} 
+                    color={isJoinRequested && !isInvited ? theme.primary : 'white'} 
+                    style={{ marginRight: 10 }}
+                  />
+                  <Text style={[
+                    styles.prominentJoinButtonText, 
+                    { color: isJoinRequested && !isInvited ? theme.primary : 'white' }
+                  ]}>
+                    {isUpdating 
+                      ? 'Processing...' 
+                      : (isParticipating 
+                          ? 'Participating' 
+                          : isInvited 
+                            ? 'Accept Invitation' 
+                            : isJoinRequested 
+                              ? 'Request Pending' 
+                              : 'Join Event'
+                        )
+                    }
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            )}
 
             {/* Category information */}
             {event.categoryId && (
@@ -1594,18 +1778,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: 'Roboto',
   },
-  joinButton: {
-    marginLeft: 'auto',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-  },
-  joinButtonText: {
-    color: 'white',
-    fontSize: 14,
-    fontWeight: '500',
-    fontFamily: 'Roboto',
-  },
   sectionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
@@ -1954,6 +2126,55 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 24,
     zIndex: 10,
+  },
+  prominentJoinButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    marginVertical: 16,
+    marginHorizontal: 0,
+    width: '100%',
+    backgroundColor: '#3498db',
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 3,
+    },
+    shadowOpacity: 0.27,
+    shadowRadius: 4.65,
+    elevation: 6,
+  },
+  prominentJoinButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+    fontFamily: 'Roboto',
+    letterSpacing: 0.5,
+  },
+  joinEventButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    marginLeft: 10,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 3,
+  },
+  joinEventButtonText: {
+    color: 'white',
+    fontSize: 15,
+    fontWeight: '600',
+    fontFamily: 'Roboto',
   },
 });
 

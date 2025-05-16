@@ -40,15 +40,21 @@ export class NotificationService {
     data: any
   ): Promise<string> {
     try {
+      // Validate inputs to prevent null values
+      if (!userId) {
+        console.error('Cannot create notification: userId is required');
+        return 'error';
+      }
+
       // Save the notification to the database
       const notificationRef = collection(db, collections.NOTIFICATIONS);
       
       const notificationData = {
         userId,
-        type,
-        title,
-        body,
-        data,
+        type: type || 'event_update', // Default type if none provided
+        title: title || 'New Notification', // Default title if none provided
+        body: body || '', // Empty string if no body provided
+        data: data || {}, // Empty object if no data provided
         createdAt: serverTimestamp(),
         read: false
       };

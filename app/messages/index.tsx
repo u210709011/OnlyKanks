@@ -13,6 +13,7 @@ import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestor
 import { db, auth } from '../../config/firebase';
 import { collections } from '../../services/firebase.service';
 import { AppHeader } from '../../components/shared/AppHeader';
+import { eventEmitter } from '../../utils/events';
 
 export const unstable_settings = {
   // Make messages.tsx not show up in the tab bar
@@ -73,7 +74,25 @@ export default function MessagesScreen() {
     // Store the unsubscribe function for cleanup
     chatsSubscriptionRef.current = unsubscribe;
     
-    return unsubscribe;
+    // Listen for logout events to clean up
+    const handleCleanup = () => {
+      console.log("Cleaning up chats listener");
+      if (chatsSubscriptionRef.current) {
+        chatsSubscriptionRef.current();
+        chatsSubscriptionRef.current = null;
+      }
+      setChats([]); // Clear chats on logout
+    };
+    
+    eventEmitter.addListener('firebaseCleanup', handleCleanup);
+    
+    return () => {
+      if (chatsSubscriptionRef.current) {
+        chatsSubscriptionRef.current();
+        chatsSubscriptionRef.current = null;
+      }
+      eventEmitter.removeAllListeners('firebaseCleanup');
+    };
   }, []);
 
   const loadChats = async () => {
@@ -100,32 +119,28 @@ export default function MessagesScreen() {
     }
   };
 
-  // Set up subscription when component mounts
+  // Set up and clean up subscription when the screen is focused/unfocused
+  useFocusEffect(
+    useCallback(() => {
+      // Subscribe when the screen is focused
+      const unsubscribe = subscribeToChats();
+      
+      // Return a cleanup function to run when the screen is unfocused
+      return () => {
+        if (unsubscribe) unsubscribe();
+      };
+    }, [subscribeToChats])
+  );
+
+  // Cleanup on component unmount
   useEffect(() => {
-    const unsubscribe = subscribeToChats();
-    
-    // Clean up subscription when component unmounts
     return () => {
       if (chatsSubscriptionRef.current) {
         chatsSubscriptionRef.current();
         chatsSubscriptionRef.current = null;
       }
     };
-  }, [subscribeToChats]);
-
-  // When screen gains focus, make sure subscription is active
-  useFocusEffect(
-    useCallback(() => {
-      // If we don't have an active subscription, set one up
-      if (!chatsSubscriptionRef.current) {
-        subscribeToChats();
-      }
-      
-      return () => {
-        // Don't unsubscribe when screen loses focus to keep updates coming
-      };
-    }, [subscribeToChats])
-  );
+  }, []);
 
   // Track last load time
   const lastLoadTime = useRef(Date.now());

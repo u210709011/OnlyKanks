@@ -9,6 +9,40 @@ import * as NavigationBar from 'expo-navigation-bar';
 import { auth } from '../config/firebase';
 import Constants from 'expo-constants';
 
+// Global error handler for Firebase permission errors
+const setupGlobalErrorHandler = () => {
+  // Keep the original console.error
+  const originalConsoleError = console.error;
+  
+  // Override console.error to filter out certain Firebase errors during logout
+  console.error = function(...args) {
+    // Convert args to a string for easier checking
+    const errorMessage = args.length > 0 ? 
+      args.map(arg => 
+        typeof arg === 'string' 
+          ? arg 
+          : (arg instanceof Error ? arg.message : String(arg))
+      ).join(' ') 
+      : '';
+    
+    // Filter out common Firebase permission errors after logout
+    if (
+      errorMessage.includes('permission-denied') || 
+      errorMessage.includes('Missing or insufficient permissions') ||
+      (errorMessage.includes('FirebaseError') && !auth.currentUser)
+    ) {
+      // Completely silence these errors - don't log anything
+      return;
+    }
+    
+    // For other errors, maintain normal behavior
+    originalConsoleError.apply(console, args);
+  };
+};
+
+// Set up the error handler
+setupGlobalErrorHandler();
+
 console.log('APP LAYOUT: Initial load');
 
 function StackLayout() {
