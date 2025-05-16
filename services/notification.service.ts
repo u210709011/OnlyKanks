@@ -1,7 +1,6 @@
 import { addDoc, collection, doc, getDoc, getDocs, query, serverTimestamp, updateDoc, where, writeBatch } from 'firebase/firestore';
 import { auth, db } from '../config/firebase';
 import { collections } from './firebase.service';
-import { PushNotificationService } from './push-notification.service';
 
 export type NotificationType = 
   | 'event_invite' 
@@ -11,7 +10,12 @@ export type NotificationType =
   | 'message'
   | 'event_request_accepted'
   | 'event_request_declined'
-  | 'event_request';
+  | 'event_request'
+  | 'photo_added'
+  | 'friend_request_accepted'
+  | 'friend_request_declined'
+  | 'event_invitation_accepted'
+  | 'event_invitation_declined';
 
 export interface Notification {
   id: string;
@@ -36,6 +40,7 @@ export class NotificationService {
     data: any
   ): Promise<string> {
     try {
+      // Save the notification to the database
       const notificationRef = collection(db, collections.NOTIFICATIONS);
       
       const notificationData = {
@@ -49,28 +54,10 @@ export class NotificationService {
       };
       
       const docRef = await addDoc(notificationRef, notificationData);
-      
-      // Also send a push notification if possible
-      try {
-        // Get the user's push token from Firestore
-        const userDoc = await getDoc(doc(db, collections.USERS, userId));
-        if (userDoc.exists() && userDoc.data().pushToken) {
-          // Schedule a local notification
-          await PushNotificationService.scheduleLocalNotification(
-            title,
-            body,
-            { type, ...data }
-          );
-        }
-      } catch (error) {
-        console.error('Error sending push notification:', error);
-        // Continue even if push notification fails
-      }
-      
       return docRef.id;
     } catch (error) {
       console.error('Error creating notification:', error);
-      throw error;
+      return 'error';
     }
   }
   
@@ -79,21 +66,21 @@ export class NotificationService {
    */
   static async markAsRead(notificationId: string): Promise<void> {
     try {
-      if (!auth.currentUser) throw new Error('User not authenticated');
+      if (!auth.currentUser) return;
       
       // First verify that the notification belongs to the current user
       const notificationRef = doc(db, collections.NOTIFICATIONS, notificationId);
       const notificationSnap = await getDoc(notificationRef);
       
       if (!notificationSnap.exists()) {
-        throw new Error('Notification not found');
+        return;
       }
       
       const notificationData = notificationSnap.data();
       
       // Check if notification belongs to current user
       if (notificationData.userId !== auth.currentUser.uid) {
-        throw new Error('Not authorized to update this notification');
+        return;
       }
       
       // Now update the notification
@@ -109,7 +96,7 @@ export class NotificationService {
    */
   static async markAllAsRead(): Promise<void> {
     try {
-      if (!auth.currentUser) throw new Error('User not authenticated');
+      if (!auth.currentUser) return;
       
       const notificationsRef = collection(db, collections.NOTIFICATIONS);
       const q = query(
@@ -128,7 +115,7 @@ export class NotificationService {
       await batch.commit();
     } catch (error) {
       console.error('Error marking all notifications as read:', error);
-      throw error;
+      // Don't throw the error to prevent app crashes
     }
   }
   
@@ -143,7 +130,7 @@ export class NotificationService {
   ): Promise<string> {
     try {
       // Check for recent message notifications from the same sender
-      if (!auth.currentUser) throw new Error('User not authenticated');
+      if (!auth.currentUser) return 'error';
       
       const notificationsRef = collection(db, collections.NOTIFICATIONS);
       const twoMinutesAgo = new Date();
@@ -161,16 +148,20 @@ export class NotificationService {
       
       // If recent notification exists, update it instead of creating a new one
       if (!snapshot.empty) {
-        const recentNotification = snapshot.docs[0];
-        const countUpdate = (recentNotification.data().data.messageCount || 1) + 1;
-        
-        await updateDoc(recentNotification.ref, {
-          body: `You have ${countUpdate} new messages`,
-          'data.messageCount': countUpdate,
-          createdAt: serverTimestamp()
-        });
-        
-        return recentNotification.id;
+        try {
+          const recentNotification = snapshot.docs[0];
+          const countUpdate = (recentNotification.data().data.messageCount || 1) + 1;
+          
+          await updateDoc(recentNotification.ref, {
+            body: `You have ${countUpdate} new messages`,
+            'data.messageCount': countUpdate,
+            createdAt: serverTimestamp()
+          });
+          
+          return recentNotification.id;
+        } catch (error) {
+          console.error('Error updating message notification:', error);
+        }
       }
     
       // Otherwise create a new notification
@@ -188,7 +179,7 @@ export class NotificationService {
       );
     } catch (error) {
       console.error('Error sending message notification:', error);
-      throw error;
+      return 'error';
     }
   }
   
@@ -201,16 +192,21 @@ export class NotificationService {
     eventName: string,
     eventId: string
   ): Promise<string> {
-    const title = `Event Invitation from ${senderName}`;
-    const body = `You've been invited to ${eventName}`;
-    
-    return this.createNotification(
-      recipientId,
-      'event_invite',
-      title,
-      body,
-      { eventId }
-    );
+    try {
+      const title = `Event Invitation from ${senderName}`;
+      const body = `You've been invited to ${eventName}`;
+      
+      return this.createNotification(
+        recipientId,
+        'event_invite',
+        title,
+        body,
+        { eventId }
+      );
+    } catch (error) {
+      console.error('Error sending event invite notification:', error);
+      return 'error';
+    }
   }
   
   /**
@@ -337,6 +333,108 @@ export class NotificationService {
       title,
       body,
       { eventId, userId: auth.currentUser?.uid }
+    );
+  }
+  
+  /**
+   * Send a photo added notification
+   */
+  static async sendPhotoAddedNotification(
+    recipientId: string,
+    uploaderName: string,
+    eventName: string,
+    eventId: string
+  ): Promise<string> {
+    const title = `New Photo Added`;
+    const body = `${uploaderName} added a new photo to ${eventName}`;
+    
+    return this.createNotification(
+      recipientId,
+      'photo_added',
+      title,
+      body,
+      { eventId }
+    );
+  }
+  
+  /**
+   * Send a friend request accepted notification
+   */
+  static async sendFriendRequestAcceptedNotification(
+    recipientId: string,
+    accepterName: string,
+    accepterId: string
+  ): Promise<string> {
+    const title = `Friend Request Accepted`;
+    const body = `${accepterName} accepted your friend request`;
+    
+    return this.createNotification(
+      recipientId,
+      'friend_request_accepted',
+      title,
+      body,
+      { userId: accepterId }
+    );
+  }
+  
+  /**
+   * Send a friend request declined notification
+   */
+  static async sendFriendRequestDeclinedNotification(
+    recipientId: string,
+    declinerName: string
+  ): Promise<string> {
+    const title = `Friend Request Response`;
+    const body = `${declinerName} responded to your friend request`;
+    
+    return this.createNotification(
+      recipientId,
+      'friend_request_declined',
+      title,
+      body,
+      {}
+    );
+  }
+  
+  /**
+   * Send an event invitation accepted notification
+   */
+  static async sendEventInvitationAcceptedNotification(
+    recipientId: string,
+    accepterName: string,
+    eventName: string,
+    eventId: string
+  ): Promise<string> {
+    const title = `Event Invitation Accepted`;
+    const body = `${accepterName} accepted your invitation to ${eventName}`;
+    
+    return this.createNotification(
+      recipientId,
+      'event_invitation_accepted',
+      title,
+      body,
+      { eventId }
+    );
+  }
+  
+  /**
+   * Send an event invitation declined notification
+   */
+  static async sendEventInvitationDeclinedNotification(
+    recipientId: string,
+    declinerName: string,
+    eventName: string,
+    eventId: string
+  ): Promise<string> {
+    const title = `Event Invitation Declined`;
+    const body = `${declinerName} declined your invitation to ${eventName}`;
+    
+    return this.createNotification(
+      recipientId,
+      'event_invitation_declined',
+      title,
+      body,
+      { eventId }
     );
   }
 } 

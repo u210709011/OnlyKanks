@@ -497,7 +497,8 @@ export default function UserProfileScreen() {
                 </View>
               </View>
               
-              {userEvents.length === 0 && (
+              {(activeTab === 'created' && userEvents.length === 0) || 
+               (activeTab === 'joined' && attendingEvents.length === 0) ? (
                 <View style={styles.emptyEventsContainer}>
                   <View style={[styles.emptyIconContainer, { backgroundColor: theme.card }]}>
                     <Ionicons name="calendar-outline" size={32} color={theme.primary} />
@@ -511,12 +512,13 @@ export default function UserProfileScreen() {
                       : "This user hasn't joined any events yet"}
                   </Text>
                 </View>
-              )}
+              ) : null}
             </View>
           )}
-          ListEmptyComponent={userEvents.length > 0 ? null : (
+          ListEmptyComponent={(activeTab === 'created' && userEvents.length === 0) || 
+                             (activeTab === 'joined' && attendingEvents.length === 0) ? (
             <View style={{ height: 100 }} />
-          )}
+          ) : null}
           contentContainerStyle={{ 
             paddingBottom: insets.bottom + 20,
             paddingHorizontal: 16
@@ -728,7 +730,8 @@ export default function UserProfileScreen() {
               </View>
             </View>
           )}
-          ListEmptyComponent={
+          ListEmptyComponent={(activeTab === 'created' && userEvents.length === 0) || 
+                             (activeTab === 'joined' && attendingEvents.length === 0) ? (
             <View style={styles.emptyEventsContainer}>
               <View style={[styles.emptyIconContainer, { backgroundColor: theme.card }]}>
                 <Ionicons name="calendar-outline" size={32} color={theme.primary} />
@@ -742,7 +745,7 @@ export default function UserProfileScreen() {
                   : "This user hasn't joined any events yet"}
               </Text>
             </View>
-          }
+          ) : null}
         />
       )}
     </View>

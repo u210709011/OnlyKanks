@@ -3,19 +3,23 @@ import { ThemeProvider } from '../context/theme.context';
 import { AuthProvider } from '../context/auth.context';
 import { Stack } from 'expo-router';
 import { useTheme } from '../context/theme.context';
-import { Platform, StatusBar, NativeModules } from 'react-native';
+import { Platform, StatusBar, Text, View } from 'react-native';
 import * as SystemUI from 'expo-system-ui';
 import * as NavigationBar from 'expo-navigation-bar';
-import { PushNotificationService } from '../services/push-notification.service';
 import { auth } from '../config/firebase';
-import { onAuthStateChanged } from 'firebase/auth';
+import Constants from 'expo-constants';
+
+console.log('APP LAYOUT: Initial load');
 
 function StackLayout() {
+  console.log('APP LAYOUT: StackLayout rendered');
   const { theme, isDark } = useTheme();
 
   // Set up system UI colors based on theme
   useEffect(() => {
+    console.log('APP LAYOUT: Theme effect running');
     const setupSystemUI = async () => {
+      console.log('APP LAYOUT: Setting up system UI');
       if (Platform.OS === 'android') {
         try {
           // Set status bar color and style
@@ -28,6 +32,7 @@ function StackLayout() {
 
           // Also use SystemUI for general background
           await SystemUI.setBackgroundColorAsync(isDark ? '#121212' : '#FFFFFF');
+          console.log('APP LAYOUT: System UI setup complete');
         } catch (error) {
           console.warn('Error setting navigation bar color:', error);
         }
@@ -36,22 +41,6 @@ function StackLayout() {
 
     setupSystemUI();
   }, [isDark, theme]);
-
-  // Register for push notifications when user is authenticated
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        try {
-          // Register for push notifications
-          await PushNotificationService.registerForPushNotifications();
-        } catch (error) {
-          console.error('Error registering for push notifications:', error);
-        }
-      }
-    });
-
-    return () => unsubscribe();
-  }, []);
 
   return (
     <>
@@ -97,11 +86,25 @@ function StackLayout() {
 }
 
 export default function RootLayout() {
-  return (
-    <AuthProvider>
-      <ThemeProvider>
-        <StackLayout />
-      </ThemeProvider>
-    </AuthProvider>
-  );
+  console.log('APP LAYOUT: RootLayout rendered');
+  
+  // Simple error boundary
+  try {
+    return (
+      <AuthProvider>
+        <ThemeProvider>
+          <StackLayout />
+        </ThemeProvider>
+      </AuthProvider>
+    );
+  } catch (error) {
+    console.error('CRITICAL ERROR in RootLayout:', error);
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+        <Text style={{ color: 'red', fontSize: 16, textAlign: 'center' }}>
+          App failed to initialize. Please restart.
+        </Text>
+      </View>
+    );
+  }
 }

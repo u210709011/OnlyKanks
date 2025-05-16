@@ -19,7 +19,10 @@ import { useTheme } from '../context/theme.context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { PhotoService, EventPhoto } from '../services/photo.service';
-import { auth } from '../config/firebase';
+import { auth, db } from '../config/firebase';
+import { NotificationService } from '../services/notification.service';
+import { doc, getDoc } from 'firebase/firestore';
+import { EventsService, ParticipantType } from '../services/events.service';
 
 interface EventPhotosProps {
   eventId: string;
@@ -41,10 +44,23 @@ export default function EventPhotos({ eventId, isParticipant = false }: EventPho
   const [selectedPhoto, setSelectedPhoto] = useState<EventPhoto | null>(null);
   const [showPhotoModal, setShowPhotoModal] = useState(false);
   const [sharing, setSharing] = useState(false);
+  const [eventTitle, setEventTitle] = useState<string>(''); // Added to store event title
 
   useEffect(() => {
     loadPhotos();
+    fetchEventTitle();
   }, [eventId]);
+
+  const fetchEventTitle = async () => {
+    try {
+      const eventDoc = await getDoc(doc(db, 'events', eventId));
+      if (eventDoc.exists()) {
+        setEventTitle(eventDoc.data().title || 'Event');
+      }
+    } catch (error) {
+      console.error('Error fetching event title:', error);
+    }
+  };
 
   const loadPhotos = async () => {
     try {
@@ -94,11 +110,57 @@ export default function EventPhotos({ eventId, isParticipant = false }: EventPho
       );
       setPhotos(prev => [photo, ...prev]);
       setCaption('');
+      
+      // Send notifications to event participants about the new photo
+      sendPhotoNotifications();
     } catch (error) {
       console.error('Error uploading photo:', error);
       Alert.alert('Error', 'Failed to upload photo');
     } finally {
       setUploading(false);
+    }
+  };
+
+  const sendPhotoNotifications = async () => {
+    if (!auth.currentUser) return;
+    
+    try {
+      // Get event details including participants
+      const event = await EventsService.getEventById(eventId);
+      if (!event) return;
+      
+      // Get user display name
+      const uploaderName = auth.currentUser.displayName || 'Someone';
+      
+      // Send notification to the event creator if it's not the current user
+      if (event.createdBy !== auth.currentUser.uid) {
+        await NotificationService.sendPhotoAddedNotification(
+          event.createdBy,
+          uploaderName,
+          eventTitle,
+          eventId
+        );
+      }
+      
+      // Send notifications to other participants
+      if (event.participants) {
+        for (const participant of event.participants) {
+          // Skip notifications to self and non-user participants
+          if (participant.id === auth.currentUser.uid || participant.type !== ParticipantType.USER) {
+            continue;
+          }
+          
+          await NotificationService.sendPhotoAddedNotification(
+            participant.id,
+            uploaderName,
+            eventTitle,
+            eventId
+          );
+        }
+      }
+    } catch (error) {
+      console.error('Error sending photo notifications:', error);
+      // Don't block the UI if notifications fail
     }
   };
 

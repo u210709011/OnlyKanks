@@ -118,7 +118,12 @@ export class FriendsService {
       updatedAt: Timestamp.now()
     });
 
-    // If accepted, create friends relationship
+    // Get current user info for notification
+    const currentUser = auth.currentUser;
+    const userDoc = await UserService.getUser(currentUser.uid);
+    const responderName = userDoc?.displayName || currentUser.displayName || 'Someone';
+
+    // If accepted, create friends relationship and send acceptance notification
     if (status === FriendRequestStatus.ACCEPTED) {
       // Create friend record for both users
       await addDoc(collection(db, collections.FRIENDS), {
@@ -132,6 +137,29 @@ export class FriendsService {
         friendId: request.senderId,
         createdAt: Timestamp.now()
       });
+      
+      // Send notification to the sender about acceptance
+      try {
+        await NotificationService.sendFriendRequestAcceptedNotification(
+          request.senderId,
+          responderName,
+          currentUser.uid
+        );
+      } catch (error) {
+        console.error('Error sending friend request accepted notification:', error);
+        // Continue even if notification fails
+      }
+    } else if (status === FriendRequestStatus.REJECTED) {
+      // Send notification about rejection (using more neutral wording)
+      try {
+        await NotificationService.sendFriendRequestDeclinedNotification(
+          request.senderId,
+          responderName
+        );
+      } catch (error) {
+        console.error('Error sending friend request declined notification:', error);
+        // Continue even if notification fails
+      }
     }
   }
 

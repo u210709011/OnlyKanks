@@ -2,6 +2,7 @@ import { FirebaseService, collections } from './firebase.service';
 import { auth, db } from '../config/firebase';
 import { collection, query, where, orderBy, getDocs, addDoc, onSnapshot, doc, getDoc, writeBatch, increment } from 'firebase/firestore';
 import { NotificationService } from './notification.service';
+import { UserService } from './user.service';
 
 export interface Message {
   id: string;

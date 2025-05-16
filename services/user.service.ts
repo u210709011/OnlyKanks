@@ -25,7 +25,25 @@ export interface User {
 export class UserService {
   static async getUser(userId: string): Promise<User | null> {
     try {
-      const userDoc = await getDoc(doc(db, collections.USERS, userId));
+      if (!userId) {
+        console.warn('Attempted to get user with empty userId');
+        return null;
+      }
+      
+      // Add a timeout to prevent hanging
+      const fetchPromise = getDoc(doc(db, collections.USERS, userId));
+      
+      const timeoutPromise = new Promise<null>((resolve) => {
+        setTimeout(() => {
+          console.warn('Get user operation timed out');
+          resolve(null);
+        }, 5000); // 5 second timeout
+      });
+      
+      const userDoc = await Promise.race([fetchPromise, timeoutPromise]);
+      
+      if (!userDoc) return null;
+      
       if (userDoc.exists()) {
         const data = userDoc.data();
         return {
@@ -71,18 +89,28 @@ export class UserService {
   static async updateOnlineStatus(status: boolean): Promise<void> {
     try {
       const currentUser = auth.currentUser;
-      if (!currentUser) throw new Error('No authenticated user');
+      if (!currentUser) return; // Just return instead of throwing
 
       const userRef = doc(db, collections.USERS, currentUser.uid);
       
-      await updateDoc(userRef, {
+      // Use a timeout to prevent hanging
+      const updatePromise = updateDoc(userRef, {
         isOnline: status,
         lastSeen: status ? deleteField() : serverTimestamp(),
         updatedAt: serverTimestamp()
       });
+      
+      // Add a timeout to prevent hanging
+      const timeoutPromise = new Promise<void>((_, reject) => {
+        setTimeout(() => {
+          reject(new Error('Update online status timed out'));
+        }, 5000); // 5 second timeout
+      });
+      
+      await Promise.race([updatePromise, timeoutPromise]);
     } catch (error) {
       console.error('Error updating online status:', error);
-      throw error;
+      // Don't throw, just log the error
     }
   }
 

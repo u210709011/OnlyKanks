@@ -8,16 +8,17 @@
     "scheme": "myapp",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "sdkVersion": "52.0.0",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.onlykanks.app"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "navigationBarColor": "#000000",
-      "softwareNavigationBarColor": "#000000"
+      "package": "com.onlykanks.app"
     },
     "web": {
       "bundler": "metro",
@@ -47,6 +48,22 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "notification": {
+      "icon": "./assets/images/notification-icon.png",
+      "color": "#4CAF50",
+      "androidMode": "default",
+      "androidCollapsedTitle": "OnlyKanks"
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "onlykanks-app"
+      },
+      "pushNotificationsEnabled": false,
+      "bypassAuthInDev": true
     }
   }
 }

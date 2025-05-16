@@ -207,24 +207,6 @@ export class EventsService {
         }
       }
       
-      // Distance filter
-      if (
-        filterOptions.latitude !== undefined && 
-        filterOptions.longitude !== undefined &&
-        filterOptions.distance !== undefined
-      ) {
-        const distance = this.calculateDistance(
-          filterOptions.latitude,
-          filterOptions.longitude,
-          event.location.latitude,
-          event.location.longitude
-        );
-        
-        if (distance > filterOptions.distance) {
-          return false;
-        }
-      }
-      
       // Category filter
       if (filterOptions.categoryId && event.categoryId !== filterOptions.categoryId) {
         return false;
@@ -237,11 +219,29 @@ export class EventsService {
         }
       }
       
+      // Location filter
+      if (filterOptions.latitude && filterOptions.longitude && filterOptions.distance) {
+        const distance = this.calculateDistance(
+          filterOptions.latitude,
+          filterOptions.longitude,
+          event.location.latitude,
+          event.location.longitude
+        );
+        
+        if (distance > filterOptions.distance) {
+          return false;
+        }
+      }
+      
       return true;
     });
     
+    // Sort by date
     events.sort((a, b) => {
-      return a.date.toDate().getTime() - b.date.toDate().getTime();
+      const dateA = a.date.toDate();
+      const dateB = b.date.toDate();
+      
+      return dateA.getTime() - dateB.getTime();
     });
     
     return events;
@@ -433,6 +433,33 @@ export class EventsService {
           });
         }
       }
+      
+      // Send a notification to the event creator about the response
+      try {
+        // Get responder's name for the notification
+        const responderName = auth.currentUser.displayName || 'Someone';
+        
+        if (accept) {
+          // Send acceptance notification
+          await NotificationService.sendEventInvitationAcceptedNotification(
+            invitation.senderId,
+            responderName,
+            invitation.eventTitle,
+            invitation.eventId
+          );
+        } else {
+          // Send declination notification
+          await NotificationService.sendEventInvitationDeclinedNotification(
+            invitation.senderId,
+            responderName,
+            invitation.eventTitle,
+            invitation.eventId
+          );
+        }
+      } catch (error) {
+        console.error('Error sending invitation response notification:', error);
+        // Continue even if notification sending fails
+      }
     } catch (error) {
       console.error('Error responding to invitation:', error);
       throw error;
@@ -599,10 +626,8 @@ export class EventsService {
       const eventsRef = collection(db, collections.EVENTS);
       const querySnapshot = await getDocs(eventsRef);
       
-      const now = new Date();
-      
       // Filter for events where the user is a participant with ACCEPTED status
-      // but not the creator of the event
+      // but not the creator of the event, including past events
       const attendingEvents = querySnapshot.docs
         .map(doc => ({
           id: doc.id,
@@ -619,14 +644,8 @@ export class EventsService {
             (p.status === AttendeeStatus.ACCEPTED || p.status === undefined)
           );
           
-          if (!isAttending) return false;
-          
-          // Check if event has ended (considering both date and duration)
-          const eventDate = event.date.toDate();
-          const endTime = event.duration ? addMinutes(eventDate, event.duration) : eventDate;
-          
-          // Only include events that haven't ended yet
-          return now < endTime;
+          // Return all events where the user was accepted, regardless of date
+          return isAttending;
         });
       
       return attendingEvents;
@@ -650,19 +669,12 @@ export class EventsService {
         const eventsRef = collection(db, collections.EVENTS);
         const allEventsSnapshot = await getDocs(eventsRef);
         
-        const now = new Date();
-        const todayStart = startOfDay(now);
-        
         const attendingEvents = allEventsSnapshot.docs
           .map(doc => ({
             id: doc.id,
             ...doc.data()
           }) as Event)
           .filter(event => {
-            // Skip past events
-            const eventDate = event.date.toDate ? event.date.toDate() : new Date(event.date);
-            if (eventDate < todayStart) return false;
-            
             // Skip events created by the user
             if (event.createdBy === userId) return false;
             
@@ -776,6 +788,31 @@ export class EventsService {
       }
     } catch (error) {
       console.error('Error cleaning up expired invitations and requests:', error);
+    }
+  }
+
+  /**
+   * Get an event by its ID
+   */
+  static async getEventById(eventId: string): Promise<Event | null> {
+    try {
+      const eventDoc = await getDoc(doc(db, collections.EVENTS, eventId));
+      if (!eventDoc.exists()) {
+        return null;
+      }
+      
+      const eventData = eventDoc.data();
+      return {
+        id: eventDoc.id,
+        ...eventData,
+        date: eventData.date,
+        createdAt: eventData.createdAt,
+        updatedAt: eventData.updatedAt,
+        uploadDate: eventData.uploadDate
+      } as Event;
+    } catch (error) {
+      console.error('Error getting event by ID:', error);
+      return null;
     }
   }
 } 

@@ -14,6 +14,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/theme.context';
 import { useAuth } from '../context/auth.context';
 import { CommentService, EventComment } from '../services/comment.service';
+import { NotificationService } from '../services/notification.service';
+import { EventsService, ParticipantType } from '../services/events.service';
+import { db } from '../config/firebase';
+import { doc, getDoc } from 'firebase/firestore';
 
 interface EventCommentsProps {
   eventId: string;
@@ -122,6 +126,9 @@ export default function EventComments({ eventId, isParticipant }: EventCommentsP
         user.photoURL
       );
       
+      // Send comment notifications to event creator and participants
+      await sendCommentNotifications(newComment.trim());
+      
       // Reset the form
       setNewComment('');
       setRating(0);
@@ -138,6 +145,56 @@ export default function EventComments({ eventId, isParticipant }: EventCommentsP
       }
     } finally {
       setSubmitting(false);
+    }
+  };
+  
+  const sendCommentNotifications = async (commentText: string) => {
+    try {
+      // Get event details
+      const eventDoc = await getDoc(doc(db, 'events', eventId));
+      if (!eventDoc.exists() || !user) return;
+      
+      const eventData = eventDoc.data();
+      const eventTitle = eventData.title || 'Event';
+      
+      // Prepare shortened comment text for notification
+      const commentPreview = commentText.length > 50 
+        ? `${commentText.substring(0, 50)}...` 
+        : commentText;
+      
+      const senderName = user.displayName || 'Anonymous';
+      
+      // Send notification to the event creator if it's not the current user
+      if (eventData.createdBy !== user.id) {
+        await NotificationService.sendCommentNotification(
+          eventData.createdBy,
+          senderName,
+          eventTitle,
+          commentPreview,
+          eventId
+        );
+      }
+      
+      // Send notifications to other participants
+      if (eventData.participants) {
+        for (const participant of eventData.participants) {
+          // Skip notifications to self and non-user participants
+          if (participant.id === user.id || participant.type !== ParticipantType.USER) {
+            continue;
+          }
+          
+          await NotificationService.sendCommentNotification(
+            participant.id,
+            senderName,
+            eventTitle,
+            commentPreview,
+            eventId
+          );
+        }
+      }
+    } catch (error) {
+      console.error('Error sending comment notifications:', error);
+      // Don't block the UI if notifications fail
     }
   };
   

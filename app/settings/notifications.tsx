@@ -4,6 +4,7 @@ import { Stack } from 'expo-router';
 import { useTheme } from '../../context/theme.context';
 import { AppHeader } from '../../components/shared/AppHeader';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import NotificationTestButton from '../../components/NotificationTestButton';
 
 export default function NotificationsSettingsScreen() {
   const { theme } = useTheme();
@@ -122,6 +123,18 @@ export default function NotificationsSettingsScreen() {
             />
           </View>
         </View>
+        
+        <View style={[styles.section, { backgroundColor: theme.card }]}>
+          <View style={styles.testSection}>
+            <Text style={[styles.settingTitle, { color: theme.text, marginBottom: 8 }]}>
+              Test Notifications
+            </Text>
+            <Text style={[styles.settingDescription, { color: theme.text + '80', marginBottom: 12 }]}>
+              Send a test notification to verify your settings
+            </Text>
+            <NotificationTestButton />
+          </View>
+        </View>
 
         <Text style={[styles.disclaimer, { color: theme.text + '60' }]}>
           Changes to notification settings are saved automatically
@@ -171,5 +184,8 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     paddingHorizontal: 24,
     fontFamily: 'Roboto',
+  },
+  testSection: {
+    padding: 16,
   },
 }); 
